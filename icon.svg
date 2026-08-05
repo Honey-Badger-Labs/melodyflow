@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400" width="400" height="400">
+    <defs><radialGradient id="s" cx="42%" cy="30%" r="78%">
+      <stop offset="0" stop-color="#31344c"/><stop offset="0.55" stop-color="#1d2030"/><stop offset="1" stop-color="#12141d"/>
+    </radialGradient></defs>
+    <circle cx="200" cy="200" r="196" fill="url(#s)"/>
+    <circle cx="200" cy="200" r="196" fill="none" stroke="#3f424d" stroke-width="1.5"/>
+    <circle cx="200" cy="200" r="183" fill="none" stroke="#2a2d3a" stroke-width="1"/>
+    <rect x="178.5" y="20" width="43" height="80" rx="21.5" transform="rotate(0 200 60)" fill="#2e3145" stroke="#15171f" stroke-width="1.2"/>
+    <text x="200" y="60" fill="#aeb2c2" font-family="Inter,system-ui,sans-serif" font-weight="600" font-size="24" text-anchor="middle" dominant-baseline="central">6</text><circle cx="200" cy="74.88" r="1.56" fill="#aeb2c2"/>
+    <rect x="248.5" y="38.75644347017858" width="43" height="80" rx="21.5" transform="rotate(30 270 78.75644347017858)" fill="#2e3145" stroke="#15171f" stroke-width="1.2"/>
+    <circle cx="270" cy="63.876443470178586" r="1.56" fill="#aeb2c2"/><text x="270" y="78.75644347017858" fill="#aeb2c2" font-family="Inter,system-ui,sans-serif" font-weight="600" font-size="24" text-anchor="middle" dominant-baseline="central">2</text>
+    <rect x="299.7435565298214" y="90" width="43" height="80" rx="21.5" transform="rotate(60 321.2435565298214 130)" fill="#2e3145" stroke="#15171f" stroke-width="1.2"/>
+    <text x="321.2435565298214" y="130" fill="#aeb2c2" font-family="Inter,system-ui,sans-serif" font-weight="600" font-size="24" text-anchor="middle" dominant-baseline="central">7</text>
+    <rect x="318.5" y="160" width="43" height="80" rx="21.5" transform="rotate(90 340 200)" fill="#2e3145" stroke="#15171f" stroke-width="1.2"/>
+    <text x="340" y="200" fill="#aeb2c2" font-family="Inter,system-ui,sans-serif" font-weight="600" font-size="24" text-anchor="middle" dominant-baseline="central">1</text>
+    <rect x="299.74355652982143" y="230" width="43" height="80" rx="21.5" transform="rotate(120 321.24355652982143 270)" fill="#2e3145" stroke="#15171f" stroke-width="1.2"/>
+    <text x="321.24355652982143" y="270" fill="#aeb2c2" font-family="Inter,system-ui,sans-serif" font-weight="600" font-size="24" text-anchor="middle" dominant-baseline="central">5</text>
+    <rect x="248.5" y="281.24355652982143" width="43" height="80" rx="21.5" transform="rotate(150 270 321.24355652982143)" fill="#2e3145" stroke="#15171f" stroke-width="1.2"/>
+    <text x="270" y="321.24355652982143" fill="#aeb2c2" font-family="Inter,system-ui,sans-serif" font-weight="600" font-size="24" text-anchor="middle" dominant-baseline="central">3</text>
+    <rect x="178.50000000000003" y="300" width="43" height="80" rx="21.5" transform="rotate(180 200.00000000000003 340)" fill="#2e3145" stroke="#15171f" stroke-width="1.2"/>
+    <text x="200.00000000000003" y="340" fill="#aeb2c2" font-family="Inter,system-ui,sans-serif" font-weight="600" font-size="24" text-anchor="middle" dominant-baseline="central">7</text><circle cx="200.00000000000003" cy="354.88" r="1.56" fill="#aeb2c2"/>
+    <rect x="108.5" y="281.2435565298214" width="43" height="80" rx="21.5" transform="rotate(210 130 321.2435565298214)" fill="#2e3145" stroke="#15171f" stroke-width="1.2"/>
+    <text x="130" y="321.2435565298214" fill="#aeb2c2" font-family="Inter,system-ui,sans-serif" font-weight="600" font-size="24" text-anchor="middle" dominant-baseline="central">4</text>
+    <rect x="57.25644347017861" y="230.00000000000006" width="43" height="80" rx="21.5" transform="rotate(240 78.75644347017861 270.00000000000006)" fill="#2e3145" stroke="#15171f" stroke-width="1.2"/>
+    <text x="78.75644347017861" y="270.00000000000006" fill="#aeb2c2" font-family="Inter,system-ui,sans-serif" font-weight="600" font-size="24" text-anchor="middle" dominant-baseline="central">6</text>
+    <rect x="38.5" y="160.00000000000003" width="43" height="80" rx="21.5" transform="rotate(270 60 200.00000000000003)" fill="#2e3145" stroke="#15171f" stroke-width="1.2"/>
+    <text x="60" y="200.00000000000003" fill="#aeb2c2" font-family="Inter,system-ui,sans-serif" font-weight="600" font-size="24" text-anchor="middle" dominant-baseline="central">2</text>
+    <rect x="57.256443470178596" y="90" width="43" height="80" rx="21.5" transform="rotate(300 78.7564434701786 130)" fill="#2e3145" stroke="#15171f" stroke-width="1.2"/>
+    <circle cx="78.7564434701786" cy="115.12" r="1.56" fill="#aeb2c2"/><text x="78.7564434701786" y="130" fill="#aeb2c2" font-family="Inter,system-ui,sans-serif" font-weight="600" font-size="24" text-anchor="middle" dominant-baseline="central">1</text>
+    <rect x="108.49999999999994" y="38.756443470178624" width="43" height="80" rx="21.5" transform="rotate(330 129.99999999999994 78.75644347017862)" fill="#2e3145" stroke="#15171f" stroke-width="1.2"/>
+    <circle cx="129.99999999999994" cy="63.87644347017863" r="1.56" fill="#aeb2c2"/><text x="129.99999999999994" y="78.75644347017862" fill="#aeb2c2" font-family="Inter,system-ui,sans-serif" font-weight="600" font-size="24" text-anchor="middle" dominant-baseline="central">3</text>
+    <rect x="154" y="154" width="92" height="92" rx="46" fill="#9184d9" stroke="#c7c0f2" stroke-width="1.4"/>
+    <text x="200" y="200" fill="#171927" font-family="Inter,system-ui,sans-serif" font-weight="600" font-size="30" text-anchor="middle" dominant-baseline="central">5</text>
+    <circle cx="200" cy="219" r="1.9" fill="#171927"/>
+</svg>

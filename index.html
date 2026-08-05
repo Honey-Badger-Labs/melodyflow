@@ -1,0 +1,709 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no">
+<meta name="theme-color" content="#161826">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="MelodyFlow">
+<title>MelodyFlow</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
+<style>
+/* ── Nocturne tokens (from the design system) ───────────────────────────── */
+:root{
+  --color-bg:#161826; --color-surface:#232532; --color-text:#e9e9ed;
+  --color-accent:#9184d9; --color-accent-2:#a7a1db;
+  --color-divider:color-mix(in srgb,#e9e9ed 16%,transparent);
+  --color-neutral-100:#f3f5fe; --color-neutral-200:#e4e7f5; --color-neutral-300:#cfd3e5;
+  --color-neutral-400:#b2b6ca; --color-neutral-500:#9397ab; --color-neutral-600:#75798c;
+  --color-neutral-700:#595d6c; --color-neutral-800:#3f424d; --color-neutral-900:#292b31;
+  --color-accent-100:#f5f4ff; --color-accent-200:#e7e5fe; --color-accent-300:#d2cefd;
+  --color-accent-400:#b5abfc; --color-accent-500:#968ae0; --color-accent-600:#796cbf;
+  --color-accent-700:#5d5294; --color-accent-800:#423a6a; --color-accent-900:#2b2741;
+  --font-heading:"Inter",system-ui,sans-serif; --font-body:"Inter",system-ui,sans-serif;
+  --radius-sm:4px; --radius-md:8px; --radius-lg:14px;
+}
+*,*::before,*::after{box-sizing:border-box}
+html,body{margin:0;height:100%;background:#0f1018;font-family:var(--font-body);-webkit-tap-highlight-color:transparent}
+a{color:var(--color-accent-400);text-decoration:none}
+h1,h2,h3,h4{font-family:var(--font-heading);font-weight:500}
+button{font-family:inherit}
+@keyframes mfLevel{0%,100%{transform:scaleY(.2)}50%{transform:scaleY(1)}}
+
+/* the phone-sized app shell — fills the viewport on a phone, centred on desktop */
+#phone{
+  position:relative;width:100%;max-width:440px;height:100dvh;margin:0 auto;
+  display:flex;flex-direction:column;overflow:hidden;
+  background:radial-gradient(120% 62% at 50% -10%,#252a4d 0%,transparent 60%),var(--color-bg);
+  color:var(--color-text);-webkit-user-select:none;user-select:none;
+}
+#scroll{flex:1;min-height:0;overflow:auto;padding:16px 0 4px;-webkit-overflow-scrolling:touch}
+#scroll::-webkit-scrollbar{width:0}
+nav#tabbar{flex:none;display:flex;padding:8px 10px calc(10px + env(safe-area-inset-bottom));
+  border-top:1px solid var(--color-neutral-900);background:rgba(22,24,38,.94);backdrop-filter:blur(8px)}
+input[type=range]{accent-color:var(--color-accent);background:transparent}
+</style>
+</head>
+<body>
+<div id="phone">
+  <div id="scroll"></div>
+  <nav id="tabbar"></nav>
+</div>
+
+<script>
+"use strict";
+/* ════════════════════════════════════════════════════════════════════════
+   MelodyFlow — 13-note C-major tongue-drum songbook.
+   Standalone port of the Nocturne redesign (MelodyFlow.dc.html).
+   Static, offline, no server. State persists to localStorage.
+   ════════════════════════════════════════════════════════════════════════ */
+
+/* ── music theory / notation ───────────────────────────────────────────── */
+const DEG = {1:0,2:2,3:4,4:5,5:7,6:9,7:11};
+const RING  = ['6.','.2','7','1','5','3','7.','4','6','2','.1','.3'];        // clockwise from twelve
+const ORDER = ['5.','6.','7.','1','2','3','4','5','6','7','.1','.2','.3'];    // low→high, for pitch nudge
+const PENT  = ['5.','6.','1','2','3','5','6','.1','.2','.3'];
+const NAMES = {'5.':'G3','6.':'A3','7.':'B3','1':'C4','2':'D4','3':'E4','4':'F4','5':'G4','6':'A4','7':'B4','.1':'C5','.2':'D5','.3':'E5'};
+const A = '#9184d9';
+
+function parts(p){ return {num:String(p).replace(/\./g,''), up:p[0]==='.', dn:p[p.length-1]==='.'}; }
+function hz(p){ const q=parts(p); return 261.6256*Math.pow(2,(DEG[+q.num]+(q.up?12:0)+(q.dn?-12:0))/12); }
+function lenLabel(d){ return d===1?'':d===0.5?'½':d===1.5?'·':d===2?'– –':d===3?'– – –':d===4?'– – – –':String(d); }
+function parse(str){
+  return str.trim().split(/\s+/).map(tok=>{
+    if(tok==='|') return {bar:true};
+    const b=tok.split('*'), dur=b[1]?parseFloat(b[1]):1;
+    return b[0]==='0' ? {rest:true,dur} : {pad:b[0],dur};
+  });
+}
+const L=(label,s)=>({label,notes:parse(s)});
+
+const SONGS=[
+  {id:'twinkle',title:'Twinkle, Twinkle, Little Star',cat:'Nursery',level:1,bpm:84,meter:'4/4',stars:3,lines:[
+    L('Twinkle, twinkle, little star','1 1 5 5 | 6 6 5*2'),L('How I wonder what you are','4 4 3 3 | 2 2 1*2'),
+    L('Up above the world so high','5 5 4 4 | 3 3 2*2'),L('Like a diamond in the sky','5 5 4 4 | 3 3 2*2')]},
+  {id:'macdonald',title:'Old MacDonald Had a Farm',cat:'Folk',level:1,bpm:96,meter:'4/4',stars:2,lines:[
+    L('Old MacDonald had a farm','1 1 1 5. | 6. 6. 5.*2'),L('E-I-E-I-O','3 3 2 2 | 1*2'),
+    L('And on that farm he had a cow','1 1 1 5. | 6. 6. 5.*2'),L('E-I-E-I-O','3 3 2 2 | 1*2')]},
+  {id:'frere',title:'Frère Jacques',cat:'Round',level:1,bpm:100,meter:'4/4',stars:3,lines:[
+    L('Frère Jacques','1 2 3 1'),L('Frère Jacques','1 2 3 1'),L('Dormez-vous?','3 4 5*2'),
+    L('Sonnez les matines','5*.5 6*.5 5*.5 4*.5 3 1'),L('Ding, ding, dong','1 5. 1*2')]},
+  {id:'ode',title:'Ode to Joy',cat:'Beethoven',level:2,bpm:88,meter:'4/4',stars:2,lines:[
+    L('Rising phrase','3 3 4 5'),L('and back down','5 4 3 2'),L('Second phrase','1 1 2 3'),
+    L('resting on 2','3*1.5 2*.5 2*2'),L('Third phrase','3 3 4 5'),L('and back down','5 4 3 2'),
+    L('Fourth phrase','1 1 2 3'),L('home on 1','2*1.5 1*.5 1*2')]},
+  {id:'jingle',title:'Jingle Bells',cat:'Christmas',level:2,bpm:108,meter:'4/4',stars:1,lines:[
+    L('Jingle bells, jingle bells','3 3 3*2 | 3 3 3*2'),L('Jingle all the way','3 5 1 2 | 3*4'),
+    L('Oh what fun it is to ride','4 4 4 4 | 4 3 3 3*.5 3*.5'),L('In a one-horse open sleigh','3 2 2 3 | 2*2 5*2')]},
+  {id:'saints',title:'When the Saints Go Marching In',cat:'Gospel',level:2,bpm:104,meter:'4/4',stars:2,lines:[
+    L('Oh when the saints','1 3 4 5*2'),L('go marching in','1 3 4 5*2'),L('Oh when the saints go marching in','5 5 4 3 | 3 2 1'),L('Oh how I want to be in that number','3 3 2 1 | 1*2 5*2')]},
+  {id:'scarborough',title:'Scarborough Fair',cat:'Dorian folk',level:2,bpm:76,meter:'3/4',stars:1,lines:[
+    L('Are you going','2 2 2*2'),L('to Scarborough Fair','6 6 5 | 2*3'),L('Parsley, sage','4 3 2 | 1*3')]},
+  {id:'amazing',title:'Amazing Grace',cat:'Hymn',level:2,bpm:72,meter:'3/4',stars:2,flag:'adapted',lines:[
+    L('Amazing grace','5. 1*2 3*.5 1*.5 | 3*3'),L('how sweet the sound','2*3 | 1*2 5.'),L('that saved a wretch like me','5. 1*2 3*.5 1*.5 | 3*3')]},
+  {id:'hedwig',title:"Hedwig's Theme",cat:'Film',level:3,bpm:88,meter:'3/4',stars:1,flag:'adapted',lines:[
+    L('Opening','6. 2 4*1.5 3*.5 | 2*3'),L('Answering phrase','.2*3 | 6*3'),L('Falling','5*1.5 4*.5 3*.5 4*.5 | 2*3')]},
+  {id:'terminator',title:'Terminator theme',cat:'Film · notebook',level:3,bpm:76,meter:'4/4',stars:0,flag:'timing',lines:[
+    L('The figure','1 1 5. 1 | 1 1 5. 1'),L('Answer','1 1 5. 1 | 7. 1*2')]},
+  {id:'lowrider',title:'Low Rider',cat:'Funk · notebook',level:3,bpm:92,meter:'4/4',stars:0,flag:'timing',lines:[
+    L('The hook','5 5 5 6 | 5*2 3*2'),L('Again','5 5 5 6 | 5*2 1*2')]},
+  {id:'cant',title:"Can't Help Falling in Love",cat:'Ballad · notebook',level:3,bpm:68,meter:'4/4',stars:1,flag:'timing',lines:[
+    L('Wise men say','1 3 5 .1*2'),L('only fools rush in','7 5 6 5*2')]},
+  {id:'homealone',title:'Somewhere in My Memory',cat:'Film · notebook',level:3,bpm:80,meter:'3/4',stars:0,flag:'timing',lines:[
+    L('Opening','5 .1*2 | 7 .1 5'),L('Answer','6 5*2 | 3*3')]}
+];
+
+const REGISTER=[
+  {t:'Scarborough Fair',v:'in',r:'Dorian, so home is 2 rather than 1. Sits inside C4–D5 with nothing changed.'},
+  {t:'Old MacDonald Had a Farm',v:'corrected',r:'Corrected, not adapted — "had a farm" drops below the tonic to 5. 6. 6. 5. An earlier version had it an octave too high.'},
+  {t:"Hedwig's Theme",v:'adapted',r:'Overturned on request. In A minor the opening eight notes are exact on white notes; only the answering phrase substitutes.'},
+  {t:'Low Rider',v:'adapted',r:'Overturned. Ruled out for needing blues notes, but your notebook has a diatonic version that plays as written.'},
+  {t:'Greensleeves',v:'out',r:'Wants G♯ at every cadence and alternates F with F♯. Four or five notes would have to change — past adaptation, into a different tune.'},
+  {t:'Stairway to Heaven',v:'out',r:'The intro is a chromatic descent A–G♯–G–F♯–F–E. Two of those notes do not exist here, and the descent is the piece.'},
+  {t:'Canon in D',v:'queued',r:'Transposes to C cleanly. The open question is range, not key.'},
+  {t:'O Christmas Tree',v:'queued',r:'Asked for, not yet sourced. I know the shape but not the passing notes with enough confidence.'}
+];
+const VC={in:['#4d7a68','#8fd0b4'],corrected:['#5d5294','#d2cefd'],adapted:['#5d5294','#d2cefd'],out:['#7a4a52','#e0a8b0'],queued:['#595d6c','#9397ab']};
+
+/* fixed design props (canvas-editable in the prototype, constants here) */
+const PROPS={bigNumbers:true, showLyrics:true, drumRotation:0};
+
+/* ── tiny escaping helper for interpolated text ─────────────────────────── */
+function esc(s){ return String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+
+/* ════════════════════════════════════════════════════════════════════════
+   App — state, audio engine, sequencing, rendering
+   ════════════════════════════════════════════════════════════════════════ */
+const App = {
+  state:{
+    tab:'play', screen:'library', filter:'all', songId:'twinkle', line:0,
+    cur:-1, playing:false, playScope:null, beat:0, lit:null, tempo:84, mode:'guided',
+    drumMode:'free', drone:false, rec:'idle', hasCap:false, book:'score',
+    edNotes:[], edTitle:'', edSub:'', sel:0, rot:0,
+    tapMsg:'Terminator is really in 13/8. Tap four bars and I will re-bar it.'
+  },
+
+  /* ---- persistence (progress + preferences only) ---- */
+  load(){
+    try{
+      const s=JSON.parse(localStorage.getItem('melodyflow')||'{}');
+      ['songId','line','tempo','rot','mode','drumMode','filter','book'].forEach(k=>{
+        if(s[k]!==undefined) this.state[k]=s[k];
+      });
+      if(!SONGS.some(x=>x.id===this.state.songId)){ this.state.songId='twinkle'; this.state.line=0; }
+    }catch(e){}
+  },
+  save(){
+    const s=this.state, keep={songId:s.songId,line:s.line,tempo:s.tempo,rot:s.rot,mode:s.mode,drumMode:s.drumMode,filter:s.filter,book:s.book};
+    try{ localStorage.setItem('melodyflow',JSON.stringify(keep)); }catch(e){}
+  },
+
+  setState(patch){ Object.assign(this.state,patch); this.render(); this.save(); },
+
+  /* ---- audio ---- */
+  ac(){ if(!this._ac) this._ac=new (window.AudioContext||window.webkitAudioContext)();
+        if(this._ac.state==='suspended') this._ac.resume(); return this._ac; },
+  tone(f,dur){
+    try{
+      const ac=this.ac(), t=ac.currentTime, g=ac.createGain();
+      g.connect(ac.destination);
+      g.gain.setValueAtTime(0.0001,t);
+      g.gain.exponentialRampToValueAtTime(0.22,t+0.006);
+      g.gain.exponentialRampToValueAtTime(0.0001,t+dur);
+      [[1,1],[2.02,0.3],[3.01,0.1],[5.43,0.035]].forEach(m=>{
+        const o=ac.createOscillator(), gg=ac.createGain();
+        o.type='sine'; o.frequency.value=f*m[0]; gg.gain.value=m[1];
+        o.connect(gg); gg.connect(g); o.start(t); o.stop(t+dur);
+      });
+    }catch(e){}
+  },
+  strike(p){ this.tone(hz(p),1.6); this.setState({lit:p});
+             clearTimeout(this._litT); this._litT=setTimeout(()=>this.setState({lit:null}),240); },
+
+  /* ---- song helpers ---- */
+  song(){ return SONGS.find(s=>s.id===this.state.songId)||SONGS[0]; },
+  lineNotes(){ const l=this.song().lines[this.state.line]; return l?l.notes:[]; },
+  itemsForLine(li){ const l=this.song().lines[li]; if(!l) return [];
+    return l.notes.map((n,idx)=>({n,li,idx})).filter(x=>!x.n.bar); },
+  itemsForSong(){ const out=[]; this.song().lines.forEach((l,li)=>l.notes.forEach((n,idx)=>{ if(!n.bar) out.push({n,li,idx}); })); return out; },
+
+  /* ---- sequencing ---- */
+  stop(){ this._stopped=true; clearTimeout(this._seqT); clearInterval(this._beatT);
+          this.setState({playing:false,playScope:null,cur:-1,beat:0,lit:null}); },
+  _beat(p){ this.state.beat=p; const el=document.getElementById('mf-beat'); if(el) el.style.width=Math.round(p*100)+'%'; },
+  run(items,bpm,scope){
+    this._stopped=false;
+    const beatMs=60000/bpm; let i=0;
+    const step=()=>{
+      if(this._stopped) return;
+      const it=items[i];
+      if(!it){ this.setState({playing:false,playScope:null,cur:-1,beat:0,lit:null}); return; }
+      const n=it.n, ms=n.dur*beatMs, t0=performance.now();
+      const gap=(items[i+1]&&items[i+1].li!==it.li)?380:0;
+      this.setState({line:it.li,cur:it.idx,playing:true,playScope:scope||'line',lit:n.pad||null,beat:0});
+      if(n.pad) this.tone(hz(n.pad),Math.min(2.2,ms/1000+0.4));
+      clearInterval(this._beatT);
+      this._beatT=setInterval(()=>{
+        const p=Math.min(1,(performance.now()-t0)/ms);
+        this._beat(p); if(p>=1) clearInterval(this._beatT);
+      },45);
+      i++; this._seqT=setTimeout(step,ms+gap);
+    };
+    step();
+  },
+
+  /* ---- capture + editor ---- */
+  capNotes(){ if(!this._cap) this._cap=parse('1 1 5 5 | 6 6 5*2 | 4 4 3*2'); return this._cap; },
+  openEditor(title,notes,sub){
+    const n=notes.map(x=>Object.assign({},x));
+    this.setState({screen:'editor',edTitle:title,edSub:sub,edNotes:n,sel:n.findIndex(x=>!x.bar)});
+  },
+  patch(fn){ const ns=this.state.edNotes.slice(); fn(ns,this.state.sel); this.setState({edNotes:ns}); },
+
+  /* ---- pad-wheel geometry (radial rounded tongues in a 0 0 400 400 viewBox) ---- */
+  padList(opts){
+    const st=this.state, out=[], px=opts.px||400, k=px/400;
+    const n=RING.length, w=43, h=80, fs=24, R=140, stepDeg=360/n;
+    const mk=(pad,cx,cy,deg,W,H,FS)=>{
+      const q=parts(pad), on=st.lit===pad, tgt=opts.target===pad;
+      const dim=opts.dim && opts.dim.indexOf(pad)<0;
+      const oct=q.up?1:q.dn?-1:0;
+      out.push({
+        pad, num:q.num, w:W, h:H, rx:W/2,
+        x:cx-W/2, y:cy-H/2,
+        lx:(cx/400)*100+'%', ly:(cy/400)*100+'%',
+        pxFs:Math.round(FS*k*10)/10+'px', pxDot:Math.max(2.5,FS*k*0.13)+'px',
+        tr:'rotate('+deg+' '+cx+' '+cy+')',
+        fill:on?A:tgt?'#3b336b':'#2e3145',
+        stroke:on?'#c7c0f2':tgt?A:'#15171f',
+        fg:on?'#171927':tgt?'#e7e5fe':'#aeb2c2',
+        dotUp:oct>0, dotDn:oct<0, op:dim?0.3:1
+      });
+    };
+    RING.forEach((pad,i)=>{
+      const deg=((i+(opts.rot||0))*stepDeg+360)%360, a=deg*Math.PI/180;
+      mk(pad,200+R*Math.sin(a),200-R*Math.cos(a),deg,w,h,fs);
+    });
+    mk('5.',200,200,0,92,92,27);
+    return out;
+  },
+
+  /* ════════════════════════════════════════════════════════════════════
+     Rendering
+     ════════════════════════════════════════════════════════════════════ */
+  padNum(p){ // number + octave dots for the ribbon/editor chips
+    return `<div style="display:flex;align-items:flex-start;gap:2px;line-height:.9;font:500 21px var(--font-heading)">
+      <span>${p.num}</span>
+      ${p.up?'<span style="font-size:9px;line-height:1">•</span>':''}
+      ${p.dn?'<span style="font-size:9px;line-height:1;align-self:flex-end">•</span>':''}
+    </div>`;
+  },
+
+  wheel(pads,size){ // svg shell + tongues + labels, size in px
+    const rects=pads.map((p,i)=>`<g data-act="strike" data-pad="${p.pad}" style="cursor:pointer" opacity="${p.op}">
+        <rect x="${p.x}" y="${p.y}" width="${p.w}" height="${p.h}" rx="${p.rx}" transform="${p.tr}" fill="${p.fill}" stroke="${p.stroke}" stroke-width="1.2"></rect></g>`).join('');
+    const labels=pads.map(p=>`<div style="position:absolute;left:${p.lx};top:${p.ly};transform:translate(-50%,-50%);display:flex;flex-direction:column;align-items:center;gap:${size>300?3:2}px;pointer-events:none;line-height:1;font-family:var(--font-heading);font-weight:600;font-size:${p.pxFs};color:${p.fg};opacity:${p.op}">
+        ${p.dotUp?`<span style="width:${p.pxDot};height:${p.pxDot};border-radius:50%;background:currentColor"></span>`:''}
+        <span>${p.num}</span>
+        ${p.dotDn?`<span style="width:${p.pxDot};height:${p.pxDot};border-radius:50%;background:currentColor"></span>`:''}
+      </div>`).join('');
+    const gid='mfShell'+size;
+    return `<div style="position:relative;width:${size}px;height:${size}px">
+      <svg viewBox="0 0 400 400" style="width:100%;height:100%;display:block${size>300?';filter:drop-shadow(0 22px 44px rgba(0,0,0,.5))':''}">
+        <defs><radialGradient id="${gid}" cx="42%" cy="30%" r="78%">
+          <stop offset="0" stop-color="#31344c"></stop><stop offset="0.55" stop-color="#1d2030"></stop><stop offset="1" stop-color="#12141d"></stop>
+        </radialGradient></defs>
+        <circle cx="200" cy="200" r="196" fill="url(#${gid})"></circle>
+        <circle cx="200" cy="200" r="196" fill="none" stroke="#3f424d" stroke-width="1.5"></circle>
+        <circle cx="200" cy="200" r="183" fill="none" stroke="#2a2d3a" stroke-width="1"></circle>
+        ${rects}
+      </svg>${labels}</div>`;
+  },
+
+  seg(items,active,act){ // segmented control
+    return items.map(it=>`<button data-act="${act}" data-v="${it[0]}" style="flex:1;height:${it[2]||30}px;border-radius:var(--radius-sm);border:0;cursor:pointer;font:500 ${it[3]||11.5}px Inter,sans-serif;background:${active===it[0]?'#423a6a':'transparent'};color:${active===it[0]?'#e7e5fe':'#75798c'}">${it[1]}</button>`).join('');
+  },
+
+  screenLibrary(){
+    const st=this.state, s=this.song();
+    const filters=[['all','All'],['fix','Needs fixing'],['l1','Level 1'],['l2','Level 2'],['christmas','Christmas'],['film','Film']];
+    const rows=SONGS.filter(x=> st.filter==='all'?true
+        : st.filter==='fix'?!!x.flag
+        : st.filter==='l1'?x.level===1
+        : st.filter==='l2'?x.level===2
+        : x.cat.toLowerCase().indexOf(st.filter)>=0);
+    return `<div style="padding:0 20px">
+      <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:12px">
+        <div>
+          <div style="font:600 9.5px/1 ui-monospace,Menlo,monospace;letter-spacing:.22em;text-transform:uppercase;color:var(--color-neutral-600)">13 notes · C major · G3–E5</div>
+          <div style="font:500 27px/1.1 var(--font-heading);letter-spacing:-.02em;margin-top:7px">Songbook</div>
+        </div>
+        <button data-act="goDrums" style="display:flex;align-items:center;gap:7px;height:34px;padding:0 11px;border-radius:var(--radius-md);border:1px solid var(--color-neutral-800);background:var(--color-surface);color:var(--color-neutral-400);font:500 11.5px Inter,sans-serif;cursor:pointer">
+          <span style="width:7px;height:7px;border-radius:50%;background:var(--color-accent);display:block"></span>My 13
+        </button>
+      </div>
+
+      <button data-act="resume" style="width:100%;text-align:left;margin-top:18px;padding:14px 15px;border-radius:var(--radius-lg);border:1px solid var(--color-accent-800);background:linear-gradient(140deg,#2b2741,#232532);cursor:pointer;color:inherit;display:block">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:10px">
+          <div style="min-width:0">
+            <div style="font:600 9.5px/1 ui-monospace,Menlo,monospace;letter-spacing:.2em;text-transform:uppercase;color:var(--color-accent-400)">Pick up where you stopped</div>
+            <div style="font:500 17px/1.2 var(--font-heading);margin-top:7px">${esc(s.title)}</div>
+            <div style="font:400 12px Inter,sans-serif;color:var(--color-neutral-500);margin-top:4px">Line ${st.line+1} of ${s.lines.length} · ${esc(s.cat)}</div>
+          </div>
+          <div style="width:44px;height:44px;flex:none;border-radius:50%;border:1px solid var(--color-accent);display:grid;place-items:center;color:var(--color-accent-300);font-size:14px">▶</div>
+        </div>
+        <div style="height:3px;border-radius:2px;background:#292b31;margin-top:13px;overflow:hidden"><div style="height:100%;background:var(--color-accent);border-radius:2px;width:${Math.round(((st.line+1)/s.lines.length)*100)}%"></div></div>
+      </button>
+
+      <div style="display:flex;gap:7px;margin:18px 0 0;overflow:auto;padding-bottom:3px">
+        ${filters.map(f=>`<button data-act="filter" data-v="${f[0]}" style="flex:none;height:30px;padding:0 12px;border-radius:999px;font:500 11.5px Inter,sans-serif;cursor:pointer;border:1px solid ${st.filter===f[0]?'#5d5294':'#3f424d'};background:${st.filter===f[0]?'#2b2741':'transparent'};color:${st.filter===f[0]?'#e7e5fe':'#75798c'}">${f[1]}</button>`).join('')}
+      </div>
+
+      <div style="display:flex;flex-direction:column;gap:7px;margin-top:13px">
+        ${rows.map(x=>{
+          const stars='★★★☆☆☆'.slice(3-x.stars,6-x.stars);
+          const flag=x.flag?`<span style="flex:none;font:600 8.5px ui-monospace,Menlo,monospace;letter-spacing:.12em;text-transform:uppercase;padding:3px 6px;border-radius:var(--radius-sm);border:1px solid ${x.flag==='timing'?'#7a6a4a':'#5d5294'};color:${x.flag==='timing'?'#e0c79a':'#d2cefd'}">${x.flag}</span>`:'';
+          return `<button data-act="openSong" data-id="${x.id}" style="width:100%;display:flex;align-items:center;gap:11px;text-align:left;padding:11px 12px;border-radius:var(--radius-md);border:1px solid var(--color-neutral-900);background:var(--color-surface);color:inherit;cursor:pointer">
+            <div style="flex:none;width:34px;height:34px;border-radius:var(--radius-sm);display:grid;place-items:center;background:var(--color-bg);border:1px solid var(--color-neutral-800);font:600 11px ui-monospace,Menlo,monospace;color:var(--color-accent-300)">${x.lines.length}</div>
+            <div style="flex:1;min-width:0">
+              <div style="font:500 13.5px/1.25 Inter,sans-serif;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(x.title)}</div>
+              <div style="font:400 11px Inter,sans-serif;color:var(--color-neutral-600);margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(x.cat)} · ${x.bpm} bpm · ${x.lines.length} lines</div>
+            </div>
+            ${flag}
+            <span style="flex:none;font:400 11px Inter,sans-serif;letter-spacing:1.5px;color:var(--color-neutral-700)">${stars}</span>
+          </button>`;
+        }).join('')}
+      </div>
+      <div style="height:16px"></div>
+    </div>`;
+  },
+
+  screenPractice(){
+    const st=this.state, s=this.song(), notes=this.lineNotes();
+    const big=PROPS.bigNumbers;
+    const rotSteps=Math.round((PROPS.drumRotation+st.rot)/30);
+    const idxNow=st.cur>=0?st.cur:notes.findIndex(n=>!n.bar);
+    const playable=notes.filter(n=>!n.bar);
+    const pos=Math.max(0,notes.slice(0,Math.max(0,idxNow)).filter(n=>!n.bar).length);
+    const heroNote=playable[pos]||playable[0]||{pad:'1'};
+    const hq=parts(heroNote.pad||'1');
+    const heroThen=playable.slice(pos+1,pos+4).map(n=>n.pad||'0').join('  ');
+
+    const chips=notes.map((n,i)=>{
+      if(n.bar) return `<div style="flex:none;width:10px;text-align:center;font-size:17px;color:var(--color-accent-800)">|</div>`;
+      const q=n.pad?parts(n.pad):{num:'0',up:false,dn:false};
+      const now=i===st.cur, done=st.cur>i;
+      const bg=now?A:done?'#2b2741':'#232532', bc=now?A:done?'#423a6a':'#3f424d', fg=now?'#161826':done?'#d2cefd':'#9397ab';
+      return `<div style="flex:none;min-width:46px;height:52px;border-radius:var(--radius-md);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;transition:transform .15s,background .15s;border:1px solid ${bc};background:${bg};color:${fg};transform:${now?'scale(1.09)':'scale(1)'}">
+        <div style="display:flex;align-items:flex-start;gap:2px;line-height:.9;font:500 21px var(--font-heading)"><span>${q.num}</span>${q.up?'<span style="font-size:9px;line-height:1">•</span>':''}${q.dn?'<span style="font-size:9px;line-height:1;align-self:flex-end">•</span>':''}</div>
+        <div style="font:600 8px ui-monospace,Menlo,monospace;letter-spacing:.1em;opacity:.65">${lenLabel(n.dur)}</div>
+      </div>`;
+    }).join('');
+
+    const modes=[['notes','Notes only'],['guided','With rhythm'],['solo','On your own']];
+    const pads=this.padList({target:heroNote.pad,rot:rotSteps,px:238});
+    const playLabel=(st.playing&&st.playScope==='line')?'Stop':'Play line';
+    const songLabel=(st.playing&&st.playScope==='song')?'Stop':'Play whole song';
+    const songBtnBg=(st.playing&&st.playScope==='song')?'#423a6a':'transparent';
+
+    return `<div style="display:flex;flex-direction:column;height:100%;padding:0 16px">
+      <div style="display:flex;align-items:center;gap:10px">
+        <button data-act="back" style="width:34px;height:34px;flex:none;border-radius:var(--radius-md);border:1px solid var(--color-neutral-800);background:var(--color-surface);color:var(--color-neutral-400);font-size:15px;cursor:pointer">‹</button>
+        <div style="flex:1;min-width:0;text-align:center">
+          <div style="font:500 13.5px Inter,sans-serif;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(s.title)}</div>
+          <div style="font:400 10.5px ui-monospace,Menlo,monospace;letter-spacing:.1em;color:var(--color-neutral-600);margin-top:2px">${s.bpm} bpm · ${s.meter} · level ${s.level}</div>
+        </div>
+        <button data-act="editThis" style="height:34px;flex:none;padding:0 11px;border-radius:var(--radius-md);border:1px solid var(--color-neutral-800);background:var(--color-surface);color:var(--color-neutral-400);font:500 11.5px Inter,sans-serif;cursor:pointer">Edit</button>
+      </div>
+
+      <div style="display:flex;align-items:center;gap:16px;margin-top:14px;padding:0 4px">
+        <div style="flex:none;display:flex;align-items:flex-start;gap:3px;line-height:.82;color:var(--color-accent-300);font-size:${big?'100px':'78px'}">
+          <span style="font-family:var(--font-heading);font-weight:500">${hq.num}</span>
+          ${hq.up?'<span style="font-size:.28em;line-height:1;margin-top:-.05em">•</span>':''}
+          ${hq.dn?'<span style="font-size:.28em;line-height:1;align-self:flex-end;margin-bottom:.1em">•</span>':''}
+        </div>
+        <div style="flex:1;min-width:0">
+          <div style="font:600 9.5px/1 ui-monospace,Menlo,monospace;letter-spacing:.2em;text-transform:uppercase;color:var(--color-neutral-600)">${st.playing?'Now':'Next'}</div>
+          <div style="font:400 19px/1 Inter,sans-serif;color:var(--color-neutral-500);letter-spacing:.2em;margin-top:9px">${esc(heroThen)}</div>
+          ${PROPS.showLyrics?`<div style="font:400 12.5px/1.4 Inter,sans-serif;color:var(--color-neutral-600);margin-top:9px;text-wrap:pretty">${esc(s.lines[st.line]?s.lines[st.line].label:'')}</div>`:''}
+        </div>
+      </div>
+
+      <div style="margin-top:14px;overflow:hidden;-webkit-mask-image:linear-gradient(90deg,transparent,#000 7%,#000 93%,transparent)">
+        <div style="display:flex;align-items:center;gap:6px;transition:transform .26s cubic-bezier(.22,.9,.3,1);transform:translateX(-${Math.max(0,idxNow-2)*52}px)">${chips}</div>
+      </div>
+      <div style="height:3px;border-radius:2px;background:#292b31;margin-top:8px;overflow:hidden"><div id="mf-beat" style="height:100%;background:var(--color-accent);border-radius:2px;transition:width .08s linear;width:${Math.round(st.beat*100)}%"></div></div>
+
+      <div style="flex:1;min-height:0;display:grid;place-items:center;padding:4px 0">${this.wheel(pads,238)}</div>
+
+      <div style="padding-bottom:8px">
+        <div style="display:flex;gap:5px;padding:3px;border-radius:var(--radius-md);background:#292b31;border:1px solid var(--color-neutral-800)">${this.seg(modes,st.mode,'mode')}</div>
+        <div style="display:flex;align-items:center;gap:11px;margin-top:11px">
+          <span style="font:600 9.5px ui-monospace,Menlo,monospace;letter-spacing:.18em;text-transform:uppercase;color:var(--color-neutral-600)">Tempo</span>
+          <input type="range" min="50" max="126" step="2" data-act="setTempo" value="${st.tempo}" style="flex:1">
+          <span style="font:500 12px ui-monospace,Menlo,monospace;color:var(--color-accent-300);width:54px;text-align:right">${st.tempo} bpm</span>
+        </div>
+        <div style="display:flex;gap:9px;margin-top:11px">
+          <button data-act="listen" style="flex:1;height:44px;border-radius:var(--radius-md);border:1px solid var(--color-neutral-700);background:transparent;color:var(--color-neutral-300);font:500 14px Inter,sans-serif;cursor:pointer">Listen</button>
+          <button data-act="playLine" style="flex:1.3;height:44px;border-radius:var(--radius-md);border:1px solid var(--color-accent);background:#2b2741;color:var(--color-accent-200);font:500 14px Inter,sans-serif;cursor:pointer">${playLabel}</button>
+        </div>
+        <button data-act="playSong" style="width:100%;height:40px;margin-top:8px;border-radius:var(--radius-md);border:1px solid var(--color-accent-700);background:${songBtnBg};color:var(--color-accent-300);font:500 13px Inter,sans-serif;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px"><span style="font-size:11px">▶▶</span>${songLabel}</button>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:9px">
+          <button data-act="prevLine" style="border:0;background:none;color:var(--color-neutral-600);font:500 12px Inter,sans-serif;cursor:pointer;padding:4px 2px">‹ previous line</button>
+          <span style="font:400 11px ui-monospace,Menlo,monospace;color:var(--color-neutral-700)">${st.line+1} / ${s.lines.length}</span>
+          <button data-act="nextLine" style="border:0;background:none;color:var(--color-accent-400);font:500 12px Inter,sans-serif;cursor:pointer;padding:4px 2px">next line ›</button>
+        </div>
+      </div>
+    </div>`;
+  },
+
+  screenDrum(){
+    const st=this.state;
+    const rotSteps=Math.round((PROPS.drumRotation+st.rot)/30);
+    const pads=this.padList({dim:st.drumMode==='drone'?PENT:null,rot:rotSteps,px:334});
+    const drumModes=[['free','Free play',32,12],['drone','Improvise',32,12],['layout','Layout',32,12]];
+    const blurb=st.drumMode==='free'?'Every pad, no lesson and no scoring. Numbers are as engraved: a dot under is the low octave, a dot over is the high one.'
+      :st.drumMode==='drone'?'A drone on 1 underneath, and the pentatonic pads lifted forward.'
+      :'The saved layout for this drum. Centre pad first, then clockwise from twelve.';
+    let extra='';
+    if(st.drumMode==='layout'){
+      extra=`<div style="margin-top:12px;padding:12px 13px;border-radius:var(--radius-md);border:1px solid var(--color-neutral-800);background:var(--color-surface)">
+        <div style="font:600 9.5px ui-monospace,Menlo,monospace;letter-spacing:.18em;text-transform:uppercase;color:var(--color-neutral-600)">Centre, then clockwise</div>
+        <div style="font:400 13px/1.7 ui-monospace,Menlo,monospace;color:var(--color-accent-300);margin-top:8px;letter-spacing:.06em">5. · ${RING.join(' ')}</div>
+        <div style="display:flex;gap:8px;margin-top:12px">
+          <button style="flex:1;height:36px;border-radius:var(--radius-md);border:1px solid var(--color-accent);background:transparent;color:var(--color-accent-200);font:500 12.5px Inter,sans-serif;cursor:pointer">Add a drum</button>
+          <button style="flex:1;height:36px;border-radius:var(--radius-md);border:1px solid var(--color-neutral-700);background:transparent;color:var(--color-neutral-400);font:500 12.5px Inter,sans-serif;cursor:pointer">Copy layout</button>
+        </div></div>`;
+    } else if(st.drumMode==='drone'){
+      extra=`<div style="display:flex;align-items:center;gap:11px;margin-top:12px">
+        <button data-act="toggleDrone" style="flex:none;height:36px;padding:0 14px;border-radius:var(--radius-md);border:1px solid var(--color-accent);background:transparent;color:var(--color-accent-200);font:500 12.5px Inter,sans-serif;cursor:pointer">${st.drone?'Stop the drone':'Start the drone'}</button>
+        <span style="font:400 11.5px/1.45 Inter,sans-serif;color:var(--color-neutral-600)">Dimmed pads sit outside the pentatonic. Nothing you hit sounds wrong.</span></div>`;
+    }
+    return `<div style="display:flex;flex-direction:column;height:100%;padding:0 16px">
+      <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:12px;padding:0 4px">
+        <div>
+          <div style="font:600 9.5px/1 ui-monospace,Menlo,monospace;letter-spacing:.22em;text-transform:uppercase;color:var(--color-neutral-600)">My 13 · C major</div>
+          <div style="font:500 25px/1.1 var(--font-heading);letter-spacing:-.02em;margin-top:6px">The drum</div>
+        </div>
+        <div style="display:flex;gap:6px">
+          <button data-act="rotL" style="width:34px;height:34px;border-radius:var(--radius-md);border:1px solid var(--color-neutral-800);background:var(--color-surface);color:var(--color-neutral-400);cursor:pointer;font-size:14px">↺</button>
+          <button data-act="rotR" style="width:34px;height:34px;border-radius:var(--radius-md);border:1px solid var(--color-neutral-800);background:var(--color-surface);color:var(--color-neutral-400);cursor:pointer;font-size:14px">↻</button>
+        </div>
+      </div>
+      <div style="display:flex;gap:5px;margin-top:15px;padding:3px;border-radius:var(--radius-md);background:#292b31;border:1px solid var(--color-neutral-800)">${this.seg(drumModes,st.drumMode,'drumMode')}</div>
+      <div style="flex:1;min-height:0;display:grid;place-items:center;padding:8px 0">${this.wheel(pads,334)}</div>
+      <div style="padding:0 2px 12px">
+        <div style="font:400 12.5px/1.6 Inter,sans-serif;color:var(--color-neutral-500);text-wrap:pretty">${blurb}</div>
+        ${extra}
+      </div>
+    </div>`;
+  },
+
+  screenCapture(){
+    const st=this.state;
+    const recLabel=st.rec==='listening'?'Listening':'Record';
+    const recHint=st.rec==='listening'?'play or hum the phrase':st.hasCap?'tap to record again':'four bars is plenty';
+    const recGlow=st.rec==='listening'?'0 0 0 10px rgba(145,132,217,.10), 0 0 48px rgba(145,132,217,.34)':'none';
+    const bars=Array.from({length:13},(_,i)=>`<div style="width:4px;height:40px;border-radius:2px;background:${st.rec==='listening'?'#9184d9':'#3f424d'};transform-origin:50% 100%;animation:${st.rec==='listening'?'mfLevel '+(520+(i%5)*130)+'ms ease-in-out '+(i*60)+'ms infinite':'none'}"></div>`).join('');
+    const recents=[{name:'Kitchen radio hook',notes:'3 3 4 5 | 5 4 3 2',when:'yesterday'},{name:'Something in 3',notes:'5 .1*2 | 7 .1 5',when:'Tue'}];
+    const capBlock=st.hasCap?`<div style="margin-top:20px;padding:14px;border-radius:var(--radius-lg);border:1px solid var(--color-neutral-800);background:var(--color-surface)">
+        <div style="display:flex;align-items:baseline;justify-content:space-between">
+          <div style="font:500 14px Inter,sans-serif">Heard 11 notes</div>
+          <div style="font:400 11px ui-monospace,Menlo,monospace;color:var(--color-neutral-600)">≈ 84 bpm · 4/4</div>
+        </div>
+        <div style="font:400 12.5px/1.6 Inter,sans-serif;color:var(--color-neutral-500);margin-top:7px;text-wrap:pretty">Two notes came back uncertain — they are dashed in the editor. One sat outside your drum and has been snapped to the nearest pad.</div>
+        <div style="font:400 19px/1.9 ui-monospace,Menlo,monospace;color:var(--color-accent-300);margin-top:9px;letter-spacing:.08em;word-break:break-word">1 1 5 5 | 6 6 5*2 | 4 4 3*2</div>
+        <div style="display:flex;gap:8px;margin-top:13px">
+          <button data-act="playCapture" style="flex:1;height:40px;border-radius:var(--radius-md);border:1px solid var(--color-neutral-700);background:transparent;color:var(--color-neutral-300);font:500 13px Inter,sans-serif;cursor:pointer">Hear it back</button>
+          <button data-act="editCapture" style="flex:1.2;height:40px;border-radius:var(--radius-md);border:1px solid var(--color-accent);background:#2b2741;color:var(--color-accent-200);font:500 13px Inter,sans-serif;cursor:pointer">Fix and save</button>
+        </div></div>`:'';
+    return `<div style="padding:0 20px">
+      <div style="font:600 9.5px/1 ui-monospace,Menlo,monospace;letter-spacing:.22em;text-transform:uppercase;color:var(--color-neutral-600)">Hum it, play it, or hold up a speaker</div>
+      <div style="font:500 27px/1.1 var(--font-heading);letter-spacing:-.02em;margin-top:7px">Capture</div>
+      <p style="font:400 13px/1.65 Inter,sans-serif;color:var(--color-neutral-500);margin:11px 0 0;text-wrap:pretty">Anything you can hum becomes numbers you can play. What comes back is a draft — you correct it before it enters the book.</p>
+      <div style="margin-top:22px;display:grid;place-items:center;gap:16px">
+        <button data-act="toggleRec" style="width:132px;height:132px;border-radius:50%;border:1px solid var(--color-accent);background:radial-gradient(circle at 50% 38%,#2b2741,#232532);cursor:pointer;display:grid;place-items:center;color:var(--color-accent-200);box-shadow:${recGlow};transition:box-shadow .3s">
+          <span style="font:500 15px Inter,sans-serif">${recLabel}</span>
+        </button>
+        <div style="display:flex;align-items:flex-end;gap:4px;height:40px">${bars}</div>
+        <div style="font:400 12px ui-monospace,Menlo,monospace;letter-spacing:.1em;color:var(--color-neutral-600)">${recHint}</div>
+      </div>
+      ${capBlock}
+      <div style="margin-top:20px;font:600 9.5px ui-monospace,Menlo,monospace;letter-spacing:.18em;text-transform:uppercase;color:var(--color-neutral-600)">Recent captures</div>
+      <div style="display:flex;flex-direction:column;gap:7px;margin-top:10px">
+        ${recents.map(r=>`<div style="display:flex;align-items:center;gap:12px;padding:11px 13px;border-radius:var(--radius-md);border:1px solid var(--color-neutral-900);background:var(--color-surface)">
+          <div style="flex:1;min-width:0"><div style="font:500 13.5px Inter,sans-serif">${esc(r.name)}</div><div style="font:400 11.5px ui-monospace,Menlo,monospace;color:var(--color-neutral-600);margin-top:3px">${esc(r.notes)}</div></div>
+          <span style="font:400 11px Inter,sans-serif;color:var(--color-neutral-700)">${esc(r.when)}</span></div>`).join('')}
+      </div>
+      <div style="height:16px"></div>
+    </div>`;
+  },
+
+  screenEditor(){
+    const st=this.state, en=st.edNotes, sel=en[st.sel]||{};
+    const chips=en.map((n,i)=>{
+      if(n.bar) return `<div style="flex:none;width:10px;height:52px;display:grid;place-items:center;font-size:17px;color:var(--color-accent-800)">|</div>`;
+      const q=n.pad?parts(n.pad):{num:'0',up:false,dn:false};
+      const on=i===st.sel;
+      const bg=on?'#423a6a':'#232532', bc=on?A:n.uncertain?'#796cbf':'#3f424d', bs=(n.uncertain&&!on)?'dashed':'solid', fg=on?'#f5f4ff':'#9397ab';
+      return `<button data-act="selNote" data-i="${i}" style="flex:none;min-width:46px;height:52px;border-radius:var(--radius-md);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;cursor:pointer;border:1px ${bs} ${bc};background:${bg};color:${fg}">
+        <div style="display:flex;align-items:flex-start;gap:2px;line-height:.9;font:500 21px var(--font-heading)"><span>${q.num}</span>${q.up?'<span style="font-size:9px;line-height:1">•</span>':''}${q.dn?'<span style="font-size:9px;line-height:1;align-self:flex-end">•</span>':''}</div>
+        <div style="font:600 8px ui-monospace,Menlo,monospace;letter-spacing:.1em;opacity:.65">${lenLabel(n.dur)}</div>
+      </button>`;
+    }).join('');
+    const selKicker=sel.rest?'Rest selected':'Note '+(en.slice(0,st.sel).filter(n=>!n.bar).length+1)+' of '+en.filter(n=>!n.bar).length;
+    const selPad=sel.rest?'0':(sel.pad||'–'), selNote=sel.rest?'silence':(NAMES[sel.pad]||'');
+    const lengths=[0.5,1,1.5,2].map(d=>{
+      const label=d===0.5?'½':d===1.5?'1½':String(d);
+      return `<button data-act="setLen" data-v="${d}" style="flex:1;height:38px;border-radius:var(--radius-md);cursor:pointer;font:500 12.5px ui-monospace,Menlo,monospace;border:1px solid ${sel.dur===d?A:'#595d6c'};background:${sel.dur===d?'#423a6a':'transparent'};color:${sel.dur===d?'#f5f4ff':'#9397ab'}">${label}</button>`;
+    }).join('');
+    return `<div style="display:flex;flex-direction:column;height:100%;padding:0 16px">
+      <div style="display:flex;align-items:center;gap:10px">
+        <button data-act="back" style="width:34px;height:34px;flex:none;border-radius:var(--radius-md);border:1px solid var(--color-neutral-800);background:var(--color-surface);color:var(--color-neutral-400);font-size:15px;cursor:pointer">‹</button>
+        <div style="flex:1;min-width:0;text-align:center">
+          <div style="font:500 13.5px Inter,sans-serif;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(st.edTitle)}</div>
+          <div style="font:400 10.5px ui-monospace,Menlo,monospace;letter-spacing:.1em;color:var(--color-neutral-600);margin-top:2px">${esc(st.edSub)}</div>
+        </div>
+        <button data-act="saveEdit" style="height:34px;flex:none;padding:0 12px;border-radius:var(--radius-md);border:1px solid var(--color-accent);background:#2b2741;color:var(--color-accent-200);font:500 12px Inter,sans-serif;cursor:pointer">Save</button>
+      </div>
+      <div style="margin-top:15px;font:600 9.5px ui-monospace,Menlo,monospace;letter-spacing:.18em;text-transform:uppercase;color:var(--color-neutral-600)">Tap a note to correct it</div>
+      <div style="margin-top:10px;display:flex;flex-wrap:wrap;gap:6px;align-content:flex-start;max-height:190px;overflow:auto">${chips}</div>
+      <div style="flex:1;min-height:8px"></div>
+      <div style="margin-bottom:10px;padding:13px;border-radius:var(--radius-lg);border:1px solid var(--color-neutral-800);background:var(--color-surface)">
+        <div style="display:flex;align-items:center;justify-content:space-between">
+          <div style="font:600 9.5px ui-monospace,Menlo,monospace;letter-spacing:.18em;text-transform:uppercase;color:var(--color-neutral-600)">${selKicker}</div>
+          <button data-act="hearSel" style="border:0;background:none;color:var(--color-accent-400);font:500 11.5px Inter,sans-serif;cursor:pointer">hear it</button>
+        </div>
+        <div style="display:flex;align-items:center;gap:11px;margin-top:11px">
+          <button data-act="pitchDown" style="width:44px;height:44px;flex:none;border-radius:var(--radius-md);border:1px solid var(--color-neutral-700);background:transparent;color:var(--color-neutral-300);font-size:17px;cursor:pointer">−</button>
+          <div style="flex:1;height:44px;border-radius:var(--radius-md);border:1px solid var(--color-accent-700);background:#2b2741;display:flex;align-items:center;justify-content:center;gap:9px">
+            <span style="font:500 21px var(--font-heading);color:var(--color-accent-200)">${selPad}</span>
+            <span style="font:400 11.5px ui-monospace,Menlo,monospace;color:var(--color-accent-400)">${selNote}</span>
+          </div>
+          <button data-act="pitchUp" style="width:44px;height:44px;flex:none;border-radius:var(--radius-md);border:1px solid var(--color-neutral-700);background:transparent;color:var(--color-neutral-300);font-size:17px;cursor:pointer">+</button>
+        </div>
+        <div style="display:flex;gap:6px;margin-top:9px">${lengths}</div>
+        <div style="display:flex;gap:6px;margin-top:7px">
+          <button data-act="makeRest" style="flex:1;height:36px;border-radius:var(--radius-md);border:1px solid var(--color-neutral-700);background:transparent;color:var(--color-neutral-400);font:500 12px Inter,sans-serif;cursor:pointer">Rest</button>
+          <button data-act="dupNote" style="flex:1;height:36px;border-radius:var(--radius-md);border:1px solid var(--color-neutral-700);background:transparent;color:var(--color-neutral-400);font:500 12px Inter,sans-serif;cursor:pointer">Duplicate</button>
+          <button data-act="delNote" style="flex:1;height:36px;border-radius:var(--radius-md);border:1px solid var(--color-neutral-700);background:transparent;color:var(--color-neutral-400);font:500 12px Inter,sans-serif;cursor:pointer">Delete</button>
+        </div>
+        <div style="height:1px;background:var(--color-neutral-800);margin:12px 0"></div>
+        <div style="display:flex;align-items:center;gap:11px">
+          <button data-act="tapTempo" style="flex:none;height:40px;padding:0 15px;border-radius:var(--radius-md);border:1px solid var(--color-accent);background:transparent;color:var(--color-accent-200);font:500 12.5px Inter,sans-serif;cursor:pointer">Tap the beat</button>
+          <span style="font:400 11.5px/1.45 Inter,sans-serif;color:var(--color-neutral-600);flex:1">${esc(st.tapMsg)}</span>
+        </div>
+      </div>
+    </div>`;
+  },
+
+  screenBook(){
+    const st=this.state;
+    const bookTabs=[['score','Arrangements',32,12],['reg','Register',32,12]];
+    let body='';
+    if(st.book==='score'){
+      body=`<div style="display:flex;flex-direction:column;gap:12px;margin-top:15px">
+        ${SONGS.slice(0,4).map(x=>`<div style="padding:14px;border-radius:var(--radius-lg);border:1px solid var(--color-neutral-900);background:var(--color-surface)">
+          <div style="display:flex;align-items:baseline;justify-content:space-between;gap:10px">
+            <div style="font:500 15px Inter,sans-serif">${esc(x.title)}</div>
+            <button data-act="scoreEdit" data-id="${x.id}" style="border:0;background:none;color:var(--color-accent-400);font:500 11.5px Inter,sans-serif;cursor:pointer;flex:none">edit</button>
+          </div>
+          <div style="font:400 10.5px ui-monospace,Menlo,monospace;letter-spacing:.12em;color:var(--color-neutral-600);margin-top:3px">${esc(x.cat)} · ${x.bpm} bpm · ${x.meter}</div>
+          <div style="margin-top:10px;display:flex;flex-direction:column;gap:6px">
+            ${x.lines.map(l=>{
+              const notes=l.notes.map(n=>n.bar?'|':(n.rest?'0':n.pad)+(n.dur===1?'':'*'+n.dur)).join(' ');
+              return `<div style="display:flex;gap:11px;align-items:baseline">
+                <div style="flex:none;width:92px;font:400 10.5px/1.4 Inter,sans-serif;color:var(--color-neutral-700);text-align:right">${esc(l.label)}</div>
+                <div style="flex:1;font:400 13.5px/1.5 ui-monospace,Menlo,monospace;color:var(--color-accent-300);letter-spacing:.05em">${esc(notes)}</div></div>`;
+            }).join('')}
+          </div></div>`).join('')}
+      </div>`;
+    } else {
+      body=`<div style="display:flex;flex-direction:column;gap:8px;margin-top:15px">
+        ${REGISTER.map(r=>{
+          const bc=VC[r.v][0], fg=VC[r.v][1];
+          return `<div style="padding:13px;border-radius:var(--radius-md);border:1px solid var(--color-neutral-900);background:var(--color-surface)">
+            <div style="display:flex;align-items:center;gap:9px">
+              <span style="flex:none;font:600 8.5px ui-monospace,Menlo,monospace;letter-spacing:.12em;text-transform:uppercase;padding:3px 7px;border-radius:var(--radius-sm);border:1px solid ${bc};color:${fg}">${r.v}</span>
+              <span style="font:500 13.5px Inter,sans-serif;flex:1;min-width:0">${esc(r.t)}</span>
+            </div>
+            <div style="font:400 12px/1.6 Inter,sans-serif;color:var(--color-neutral-500);margin-top:7px;text-wrap:pretty">${esc(r.r)}</div></div>`;
+        }).join('')}
+      </div>`;
+    }
+    return `<div style="padding:0 20px">
+      <div style="font:600 9.5px/1 ui-monospace,Menlo,monospace;letter-spacing:.22em;text-transform:uppercase;color:var(--color-neutral-600)">Every arrangement, and why it is here</div>
+      <div style="font:500 27px/1.1 var(--font-heading);letter-spacing:-.02em;margin-top:7px">The book</div>
+      <div style="display:flex;gap:5px;margin-top:15px;padding:3px;border-radius:var(--radius-md);background:#292b31;border:1px solid var(--color-neutral-800)">${this.seg(bookTabs,st.book,'book')}</div>
+      ${body}
+      <div style="height:16px"></div>
+    </div>`;
+  },
+
+  tabbar(){
+    const st=this.state;
+    const tabs=[['play','Play','◉'],['drum','Drum','◍'],['capture','Capture','◐'],['book','Book','▤']];
+    return tabs.map(t=>`<button data-act="tab" data-v="${t[0]}" style="flex:1;display:flex;flex-direction:column;align-items:center;gap:5px;border:0;background:none;cursor:pointer;padding:4px 0;color:${st.tab===t[0]?'#d2cefd':'#595d6c'}">
+      <span style="font-size:16px;line-height:1">${t[2]}</span><span style="font:500 10px Inter,sans-serif">${t[1]}</span></button>`).join('');
+  },
+
+  render(){
+    const st=this.state;
+    let html='';
+    switch(st.screen){
+      case 'library': html=this.screenLibrary(); break;
+      case 'practice': html=this.screenPractice(); break;
+      case 'drum': html=this.screenDrum(); break;
+      case 'capture': html=this.screenCapture(); break;
+      case 'editor': html=this.screenEditor(); break;
+      case 'book': html=this.screenBook(); break;
+    }
+    document.getElementById('scroll').innerHTML=html;
+    document.getElementById('tabbar').innerHTML=this.tabbar();
+  },
+
+  /* ---- action dispatch (event delegation; avoids id lookups entirely) ---- */
+  dispatch(act,ds,ev){
+    const st=this.state, s=this.song();
+    switch(act){
+      case 'tab': this.stop(); this.setState({tab:ds.v,screen:ds.v==='play'?'library':ds.v}); break;
+      case 'goDrums': this.setState({tab:'drum',screen:'drum',drumMode:'layout'}); break;
+      case 'resume': this.setState({screen:'practice'}); break;
+      case 'filter': this.setState({filter:ds.v}); break;
+      case 'openSong': this.stop(); this.setState({songId:ds.id,line:0,screen:'practice',cur:-1}); break;
+      case 'back': this.stop(); this.setState({screen:st.tab==='play'?'library':st.tab}); break;
+      case 'editThis': this.openEditor(s.title,s.lines[st.line].notes,'Line '+(st.line+1)+' · '+s.meter); break;
+      case 'strike': this.strike(ds.pad); break;
+      case 'mode': this.setState({mode:ds.v}); break;
+      case 'setTempo': this.setState({tempo:+ev.target.value}); break;
+      case 'listen': this.stop(); setTimeout(()=>this.run(this.itemsForLine(st.line),Math.round(st.tempo*0.8),'line'),60); break;
+      case 'playLine': if(st.playing){ this.stop(); } else { this.run(this.itemsForLine(st.line),st.tempo,'line'); } break;
+      case 'playSong': if(st.playing){ this.stop(); } else { this.setState({line:0}); setTimeout(()=>this.run(this.itemsForSong(),st.tempo,'song'),40); } break;
+      case 'prevLine': this.stop(); this.setState({line:Math.max(0,st.line-1),cur:-1}); break;
+      case 'nextLine': this.stop(); this.setState({line:Math.min(s.lines.length-1,st.line+1),cur:-1}); break;
+      case 'drumMode': this.setState({drumMode:ds.v}); break;
+      case 'rotL': this.setState({rot:st.rot-30}); break;
+      case 'rotR': this.setState({rot:st.rot+30}); break;
+      case 'toggleDrone': { const on=!st.drone; this.setState({drone:on}); if(on) this.tone(hz('1')/2,7); } break;
+      case 'toggleRec': if(st.rec!=='listening'){ this.setState({rec:'listening',hasCap:false});
+          setTimeout(()=>this.setState({rec:'idle',hasCap:true}),3000); } break;
+      case 'playCapture': this.stop(); setTimeout(()=>this.run(this.capNotes().map((n,idx)=>({n,li:0,idx})).filter(x=>!x.n.bar),84,'line'),60); break;
+      case 'editCapture': { const n=this.capNotes().map(x=>Object.assign({},x)); if(n[6])n[6].uncertain=true; if(n[10])n[10].uncertain=true;
+          this.openEditor('Untitled capture',n,'11 notes · ≈84 bpm'); } break;
+      case 'selNote': { const i=+ds.i; this.setState({sel:i}); const nn=st.edNotes[i]; if(nn&&nn.pad) this.tone(hz(nn.pad),1.3); } break;
+      case 'hearSel': { const sel=st.edNotes[st.sel]; if(sel&&sel.pad) this.tone(hz(sel.pad),1.5); } break;
+      case 'pitchUp': this.patch((ns,i)=>{ const k=ORDER.indexOf(ns[i]&&ns[i].pad); if(k>=0&&k<12){ ns[i]={pad:ORDER[k+1],dur:ns[i].dur}; this.tone(hz(ORDER[k+1]),1.2); } }); break;
+      case 'pitchDown': this.patch((ns,i)=>{ const k=ORDER.indexOf(ns[i]&&ns[i].pad); if(k>0){ ns[i]={pad:ORDER[k-1],dur:ns[i].dur}; this.tone(hz(ORDER[k-1]),1.2); } }); break;
+      case 'setLen': { const d=+ds.v; this.patch((ns,i)=>{ if(ns[i]) ns[i]=Object.assign({},ns[i],{dur:d}); }); } break;
+      case 'makeRest': this.patch((ns,i)=>{ if(ns[i]) ns[i]={rest:true,dur:ns[i].dur}; }); break;
+      case 'dupNote': this.patch((ns,i)=>{ if(ns[i]) ns.splice(i+1,0,Object.assign({},ns[i])); }); break;
+      case 'delNote': { const ns=st.edNotes.slice(); ns.splice(st.sel,1); this.setState({edNotes:ns,sel:Math.max(0,st.sel-1)}); } break;
+      case 'saveEdit': this.setState({screen:st.tab==='play'?'practice':st.tab,tapMsg:'Saved to the book.'}); break;
+      case 'tapTempo': {
+        const now=performance.now();
+        this._taps=(this._taps||[]).filter(t=>now-t<2600); this._taps.push(now);
+        if(this._taps.length>1){
+          const g=this._taps.slice(1).map((t,k)=>t-this._taps[k]);
+          const avg=g.reduce((a,b)=>a+b,0)/g.length;
+          this.setState({tapMsg:Math.round(60000/avg)+' bpm from '+this._taps.length+' taps. Keep going, or Save to re-bar the line.'});
+        } else this.setState({tapMsg:'Keep tapping…'});
+      } break;
+      case 'book': this.setState({book:ds.v}); break;
+      case 'scoreEdit': { const x=SONGS.find(y=>y.id===ds.id); if(x) this.openEditor(x.title,x.lines[0].notes,'Line 1 · '+x.meter); } break;
+    }
+  },
+
+  init(){
+    this.load();
+    const root=document.getElementById('phone');
+    const handle=(ev,useChange)=>{
+      const el=ev.target.closest&&ev.target.closest('[data-act]');
+      if(!el) return;
+      const act=el.getAttribute('data-act');
+      // range control fires on 'change'; everything else on 'click'
+      const isRange=el.tagName==='INPUT';
+      if(useChange!==isRange) return;
+      const ds={ v:el.getAttribute('data-v'), id:el.getAttribute('data-id'),
+                 pad:el.getAttribute('data-pad'), i:el.getAttribute('data-i') };
+      this.dispatch(act,ds,ev);
+    };
+    root.addEventListener('click',e=>handle(e,false));
+    root.addEventListener('change',e=>handle(e,true));
+    this.render();
+  }
+};
+
+window.App = App; // exposed for console debugging
+window.addEventListener('DOMContentLoaded',()=>App.init());
+
+/* register the service worker for offline use (ignored on file://) */
+if('serviceWorker' in navigator && location.protocol.startsWith('http')){
+  window.addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}));
+}
+</script>
+</body>
+</html>
