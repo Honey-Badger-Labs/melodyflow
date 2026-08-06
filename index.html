@@ -142,6 +142,7 @@ const App = {
   state:{
     tab:'play', screen:'library', filter:'all', songId:'twinkle', line:0,
     cur:-1, playing:false, playScope:null, beat:0, lit:null, tempo:84, mode:'guided',
+    armed:false, armScope:null, armItems:[], armIdx:0,
     drumMode:'free', drone:false, rec:'idle', hasCap:false, book:'score',
     edNotes:[], edTitle:'', edSub:'', sel:0, rot:0,
     tapMsg:'Terminator is really in 13/8. Tap four bars and I will re-bar it.'
@@ -181,8 +182,28 @@ const App = {
       });
     }catch(e){}
   },
-  strike(p){ this.tone(hz(p),1.6); this.setState({lit:p});
-             clearTimeout(this._litT); this._litT=setTimeout(()=>this.setState({lit:null}),240); },
+  strike(p){
+    this.tone(hz(p),1.6);
+    const st=this.state;
+    // solo practice: only the correct next pad advances the line/song
+    if(st.armed && st.screen==='practice' && st.armItems && st.armItems.length){
+      const tgt=st.armItems[st.armIdx];
+      if(tgt && p===tgt.pad){
+        const next=st.armIdx+1;
+        clearTimeout(this._litT);
+        if(next<st.armItems.length){
+          const n=st.armItems[next];
+          this.setState({armIdx:next, line:n.li, cur:n.idx, lit:p});
+        } else {
+          this.setState({armed:false,armScope:null,armItems:[],armIdx:0,cur:-1,lit:p});
+        }
+        this._litT=setTimeout(()=>this.setState({lit:null}),240);
+        return;
+      }
+    }
+    this.setState({lit:p});
+    clearTimeout(this._litT); this._litT=setTimeout(()=>this.setState({lit:null}),240);
+  },
 
   /* ---- song helpers ---- */
   song(){ return SONGS.find(s=>s.id===this.state.songId)||SONGS[0]; },
@@ -190,19 +211,27 @@ const App = {
   itemsForLine(li){ const l=this.song().lines[li]; if(!l) return [];
     return l.notes.map((n,idx)=>({n,li,idx})).filter(x=>!x.n.bar); },
   itemsForSong(){ const out=[]; this.song().lines.forEach((l,li)=>l.notes.forEach((n,idx)=>{ if(!n.bar) out.push({n,li,idx}); })); return out; },
+  startSolo(scope){
+    const items = scope==='song'? this.itemsForSong(): this.itemsForLine(this.state.line);
+    if(!items.length) return;
+    const armItems = items.map(x=>({li:x.li, idx:x.idx, pad:x.n.pad}));
+    const f = armItems[0];
+    this._stopped=true; clearTimeout(this._seqT); clearInterval(this._beatT);
+    this.setState({armed:true, armScope:scope, armItems, armIdx:0, line:f.li, cur:f.idx, playing:false, playScope:null, beat:0, lit:null});
+  },
 
   /* ---- sequencing ---- */
   stop(){ this._stopped=true; clearTimeout(this._seqT); clearInterval(this._beatT);
-          this.setState({playing:false,playScope:null,cur:-1,beat:0,lit:null}); },
+          this.setState({playing:false,playScope:null,cur:-1,beat:0,lit:null,armed:false,armScope:null,armItems:[],armIdx:0}); },
   _beat(p){ this.state.beat=p; const el=document.getElementById('mf-beat'); if(el) el.style.width=Math.round(p*100)+'%'; },
-  run(items,bpm,scope){
+  run(items,bpm,scope,even){
     this._stopped=false;
     const beatMs=60000/bpm; let i=0;
     const step=()=>{
       if(this._stopped) return;
       const it=items[i];
       if(!it){ this.setState({playing:false,playScope:null,cur:-1,beat:0,lit:null}); return; }
-      const n=it.n, ms=n.dur*beatMs, t0=performance.now();
+      const n=it.n, ms=(even?1:n.dur)*beatMs, t0=performance.now();
       const gap=(items[i+1]&&items[i+1].li!==it.li)?380:0;
       this.setState({line:it.li,cur:it.idx,playing:true,playScope:scope||'line',lit:n.pad||null,beat:0});
       if(n.pad) this.tone(hz(n.pad),Math.min(2.2,ms/1000+0.4));
@@ -226,21 +255,23 @@ const App = {
 
   /* ---- pad-wheel geometry (radial rounded tongues in a 0 0 400 400 viewBox) ---- */
   padList(opts){
-    const st=this.state, out=[], px=opts.px||400, k=px/400;
+    const st=this.state, out=[];
     const n=RING.length, w=43, h=80, fs=24, R=140, stepDeg=360/n;
     const mk=(pad,cx,cy,deg,W,H,FS)=>{
       const q=parts(pad), on=st.lit===pad, tgt=opts.target===pad;
       const dim=opts.dim && opts.dim.indexOf(pad)<0;
       const oct=q.up?1:q.dn?-1:0;
+      // octave-coded number colour — mint high, amber low, light neutral middle
+      const octCol = q.up ? '#8fd0b4' : q.dn ? '#e6ca9c' : '#e2e5f0';
       out.push({
         pad, num:q.num, w:W, h:H, rx:W/2,
         x:cx-W/2, y:cy-H/2,
         lx:(cx/400)*100+'%', ly:(cy/400)*100+'%',
-        pxFs:Math.round(FS*k*10)/10+'px', pxDot:Math.max(2.5,FS*k*0.13)+'px',
+        cqFs:FS/4, // font size as % of the 400 viewBox, applied in container-query width units
         tr:'rotate('+deg+' '+cx+' '+cy+')',
         fill:on?A:tgt?'#3b336b':'#2e3145',
         stroke:on?'#c7c0f2':tgt?A:'#15171f',
-        fg:on?'#171927':tgt?'#e7e5fe':'#aeb2c2',
+        fg:on?'#171927':octCol,
         dotUp:oct>0, dotDn:oct<0, op:dim?0.3:1
       });
     };
@@ -263,21 +294,20 @@ const App = {
     </div>`;
   },
 
-  wheel(pads,size){ // svg shell + tongues + labels, size in px
-    const rects=pads.map((p,i)=>`<g data-act="strike" data-pad="${p.pad}" style="cursor:pointer" opacity="${p.op}">
+  wheel(pads,cssSize){ // svg shell + tongues + labels; cssSize is any CSS length, labels scale via container-query units
+    const rects=pads.map(p=>`<g data-act="strike" data-pad="${p.pad}" style="cursor:pointer" opacity="${p.op}">
         <rect x="${p.x}" y="${p.y}" width="${p.w}" height="${p.h}" rx="${p.rx}" transform="${p.tr}" fill="${p.fill}" stroke="${p.stroke}" stroke-width="1.2"></rect></g>`).join('');
-    const labels=pads.map(p=>`<div style="position:absolute;left:${p.lx};top:${p.ly};transform:translate(-50%,-50%);display:flex;flex-direction:column;align-items:center;gap:${size>300?3:2}px;pointer-events:none;line-height:1;font-family:var(--font-heading);font-weight:600;font-size:${p.pxFs};color:${p.fg};opacity:${p.op}">
-        ${p.dotUp?`<span style="width:${p.pxDot};height:${p.pxDot};border-radius:50%;background:currentColor"></span>`:''}
+    const labels=pads.map(p=>`<div style="position:absolute;left:${p.lx};top:${p.ly};transform:translate(-50%,-50%);display:flex;flex-direction:column;align-items:center;gap:.06em;pointer-events:none;line-height:1;font-family:var(--font-heading);font-weight:700;font-size:${p.cqFs}cqw;color:${p.fg};opacity:${p.op}">
+        ${p.dotUp?`<span style="width:.16em;height:.16em;border-radius:50%;background:currentColor"></span>`:''}
         <span>${p.num}</span>
-        ${p.dotDn?`<span style="width:${p.pxDot};height:${p.pxDot};border-radius:50%;background:currentColor"></span>`:''}
+        ${p.dotDn?`<span style="width:.16em;height:.16em;border-radius:50%;background:currentColor"></span>`:''}
       </div>`).join('');
-    const gid='mfShell'+size;
-    return `<div style="position:relative;width:${size}px;height:${size}px">
-      <svg viewBox="0 0 400 400" style="width:100%;height:100%;display:block${size>300?';filter:drop-shadow(0 22px 44px rgba(0,0,0,.5))':''}">
-        <defs><radialGradient id="${gid}" cx="42%" cy="30%" r="78%">
+    return `<div style="position:relative;width:${cssSize};max-width:100%;aspect-ratio:1;margin:0 auto;container-type:inline-size">
+      <svg viewBox="0 0 400 400" style="width:100%;height:100%;display:block;filter:drop-shadow(0 18px 40px rgba(0,0,0,.45))">
+        <defs><radialGradient id="mfShell" cx="42%" cy="30%" r="78%">
           <stop offset="0" stop-color="#31344c"></stop><stop offset="0.55" stop-color="#1d2030"></stop><stop offset="1" stop-color="#12141d"></stop>
         </radialGradient></defs>
-        <circle cx="200" cy="200" r="196" fill="url(#${gid})"></circle>
+        <circle cx="200" cy="200" r="196" fill="url(#mfShell)"></circle>
         <circle cx="200" cy="200" r="196" fill="none" stroke="#3f424d" stroke-width="1.5"></circle>
         <circle cx="200" cy="200" r="183" fill="none" stroke="#2a2d3a" stroke-width="1"></circle>
         ${rects}
@@ -365,12 +395,13 @@ const App = {
     }).join('');
 
     const modes=[['notes','Notes only'],['guided','With rhythm'],['solo','On your own']];
-    const pads=this.padList({target:heroNote.pad,rot:rotSteps,px:238});
-    const playLabel=(st.playing&&st.playScope==='line')?'Stop':'Play line';
-    const songLabel=(st.playing&&st.playScope==='song')?'Stop':'Play whole song';
-    const songBtnBg=(st.playing&&st.playScope==='song')?'#423a6a':'transparent';
+    const pads=this.padList({target:heroNote.pad,rot:rotSteps});
+    const solo=st.mode==='solo';
+    const playLabel=solo?(st.armed&&st.armScope==='line'?'Stop':'Practise line'):((st.playing&&st.playScope==='line')?'Stop':'Play line');
+    const songLabel=solo?(st.armed&&st.armScope==='song'?'Stop':'Practise song'):((st.playing&&st.playScope==='song')?'Stop':'Play whole song');
+    const songBtnBg=((st.playing&&st.playScope==='song')||(st.armed&&st.armScope==='song'))?'#423a6a':'transparent';
 
-    return `<div style="display:flex;flex-direction:column;height:100%;padding:0 16px">
+    return `<div style="padding:0 16px 14px">
       <div style="display:flex;align-items:center;gap:10px">
         <button data-act="back" style="width:34px;height:34px;flex:none;border-radius:var(--radius-md);border:1px solid var(--color-neutral-800);background:var(--color-surface);color:var(--color-neutral-400);font-size:15px;cursor:pointer">‹</button>
         <div style="flex:1;min-width:0;text-align:center">
@@ -387,7 +418,7 @@ const App = {
           ${hq.dn?'<span style="font-size:.28em;line-height:1;align-self:flex-end;margin-bottom:.1em">•</span>':''}
         </div>
         <div style="flex:1;min-width:0">
-          <div style="font:600 9.5px/1 ui-monospace,Menlo,monospace;letter-spacing:.2em;text-transform:uppercase;color:var(--color-neutral-600)">${st.playing?'Now':'Next'}</div>
+          <div style="font:600 9.5px/1 ui-monospace,Menlo,monospace;letter-spacing:.2em;text-transform:uppercase;color:var(--color-neutral-600)">${st.playing?'Now':st.armed?'Tap this':'Next'}</div>
           <div style="font:400 19px/1 Inter,sans-serif;color:var(--color-neutral-500);letter-spacing:.2em;margin-top:9px">${esc(heroThen)}</div>
           ${PROPS.showLyrics?`<div style="font:400 12.5px/1.4 Inter,sans-serif;color:var(--color-neutral-600);margin-top:9px;text-wrap:pretty">${esc(s.lines[st.line]?s.lines[st.line].label:'')}</div>`:''}
         </div>
@@ -398,10 +429,11 @@ const App = {
       </div>
       <div style="height:3px;border-radius:2px;background:#292b31;margin-top:8px;overflow:hidden"><div id="mf-beat" style="height:100%;background:var(--color-accent);border-radius:2px;transition:width .08s linear;width:${Math.round(st.beat*100)}%"></div></div>
 
-      <div style="flex:1;min-height:0;display:grid;place-items:center;padding:4px 0">${this.wheel(pads,238)}</div>
+      <div style="padding:10px 0">${this.wheel(pads,'min(62vw, 240px)')}</div>
 
       <div style="padding-bottom:8px">
         <div style="display:flex;gap:5px;padding:3px;border-radius:var(--radius-md);background:#292b31;border:1px solid var(--color-neutral-800)">${this.seg(modes,st.mode,'mode')}</div>
+        ${solo?`<div style="font:400 11px/1.5 Inter,sans-serif;color:var(--color-neutral-600);margin-top:8px;text-align:center;text-wrap:pretty">${st.armed?'Tap the lit pad on the drum to move to the next note.':'Tap “Practise line”, then play it yourself on the drum. “Listen” plays it for you.'}</div>`:''}
         <div style="display:flex;align-items:center;gap:11px;margin-top:11px">
           <span style="font:600 9.5px ui-monospace,Menlo,monospace;letter-spacing:.18em;text-transform:uppercase;color:var(--color-neutral-600)">Tempo</span>
           <input type="range" min="50" max="126" step="2" data-act="setTempo" value="${st.tempo}" style="flex:1">
@@ -443,7 +475,7 @@ const App = {
         <button data-act="toggleDrone" style="flex:none;height:36px;padding:0 14px;border-radius:var(--radius-md);border:1px solid var(--color-accent);background:transparent;color:var(--color-accent-200);font:500 12.5px Inter,sans-serif;cursor:pointer">${st.drone?'Stop the drone':'Start the drone'}</button>
         <span style="font:400 11.5px/1.45 Inter,sans-serif;color:var(--color-neutral-600)">Dimmed pads sit outside the pentatonic. Nothing you hit sounds wrong.</span></div>`;
     }
-    return `<div style="display:flex;flex-direction:column;height:100%;padding:0 16px">
+    return `<div style="padding:0 16px 14px">
       <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:12px;padding:0 4px">
         <div>
           <div style="font:600 9.5px/1 ui-monospace,Menlo,monospace;letter-spacing:.22em;text-transform:uppercase;color:var(--color-neutral-600)">My 13 · C major</div>
@@ -455,7 +487,7 @@ const App = {
         </div>
       </div>
       <div style="display:flex;gap:5px;margin-top:15px;padding:3px;border-radius:var(--radius-md);background:#292b31;border:1px solid var(--color-neutral-800)">${this.seg(drumModes,st.drumMode,'drumMode')}</div>
-      <div style="flex:1;min-height:0;display:grid;place-items:center;padding:8px 0">${this.wheel(pads,334)}</div>
+      <div style="padding:12px 0">${this.wheel(pads,'min(86vw, 336px)')}</div>
       <div style="padding:0 2px 12px">
         <div style="font:400 12.5px/1.6 Inter,sans-serif;color:var(--color-neutral-500);text-wrap:pretty">${blurb}</div>
         ${extra}
@@ -638,11 +670,17 @@ const App = {
       case 'back': this.stop(); this.setState({screen:st.tab==='play'?'library':st.tab}); break;
       case 'editThis': this.openEditor(s.title,s.lines[st.line].notes,'Line '+(st.line+1)+' · '+s.meter); break;
       case 'strike': this.strike(ds.pad); break;
-      case 'mode': this.setState({mode:ds.v}); break;
+      case 'mode': this.stop(); this.setState({mode:ds.v}); break;
       case 'setTempo': this.setState({tempo:+ev.target.value}); break;
       case 'listen': this.stop(); setTimeout(()=>this.run(this.itemsForLine(st.line),Math.round(st.tempo*0.8),'line'),60); break;
-      case 'playLine': if(st.playing){ this.stop(); } else { this.run(this.itemsForLine(st.line),st.tempo,'line'); } break;
-      case 'playSong': if(st.playing){ this.stop(); } else { this.setState({line:0}); setTimeout(()=>this.run(this.itemsForSong(),st.tempo,'song'),40); } break;
+      case 'playLine':
+        if(st.mode==='solo'){ if(st.armed) this.stop(); else this.startSolo('line'); }
+        else if(st.playing){ this.stop(); } else { this.run(this.itemsForLine(st.line),st.tempo,'line',st.mode==='notes'); }
+        break;
+      case 'playSong':
+        if(st.mode==='solo'){ if(st.armed) this.stop(); else this.startSolo('song'); }
+        else if(st.playing){ this.stop(); } else { this.setState({line:0}); setTimeout(()=>this.run(this.itemsForSong(),st.tempo,'song',st.mode==='notes'),40); }
+        break;
       case 'prevLine': this.stop(); this.setState({line:Math.max(0,st.line-1),cur:-1}); break;
       case 'nextLine': this.stop(); this.setState({line:Math.min(s.lines.length-1,st.line+1),cur:-1}); break;
       case 'drumMode': this.setState({drumMode:ds.v}); break;

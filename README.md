@@ -13,7 +13,7 @@ arrangement editable.
 
 | Tab | What it does |
 |---|---|
-| **Play** | The songbook (library) → a practice screen: next note huge, the whole line as a scrolling ribbon with a moving beat marker, and the pad lit on the drum. Listen / play line / play whole song, tempo, previous/next line. |
+| **Play** | The songbook (library) → a practice screen: next note huge, the whole line as a scrolling ribbon with a moving beat marker, and the pad lit on the drum. Three modes — **Notes only** (steady even pulse), **With rhythm** (real durations), and **On your own** (guided practice: nothing auto-plays — the next note lights up and you advance by tapping the correct pad yourself; *Listen* still plays it for you). Tempo, previous/next line. |
 | **Drum** | The virtual drum — Free play, Improvise (drone + pentatonic lifted forward), and Layout. Rotate the wheel; tap any pad to hear it. |
 | **Capture** | Record a phrase (simulated transcription in this build) → a draft that lands in the editor and can be saved to the book. |
 | **Book** | Every arrangement written out, plus the decision register (in / adapted / corrected / out / queued, each with its reason). |
