@@ -99,15 +99,18 @@ await page.waitForTimeout(250);
 
 const changes = await page.evaluate(() => ({
   diagrams: document.querySelectorAll('svg[role="img"]').length,
-  anchorsShown: document.body.innerHTML.includes('#8fd0b4'),
-  note: (document.body.textContent.match(/\d+ fingers stay put|One finger stays put|Nothing stays/) || [null])[0],
+  // #scroll, never document.body: the app's scripts sit inside <body>, so
+  // body.innerHTML contains their source and every one of these checks would
+  // pass against the code that draws the page rather than the page.
+  anchorsShown: document.getElementById('scroll').innerHTML.includes('#8fd0b4'),
+  note: (document.getElementById('scroll').textContent.match(/\d+ fingers stay put|One finger stays put|Nothing stays/) || [null])[0],
   tab: document.querySelector('#tabbar [data-act="tab"][data-v="drum"]').textContent.replace(/\s+/g, ''),
 }));
 
 await page.click('[data-act="stepOn"]');
 await page.waitForTimeout(200);
 const stepped = await page.evaluate(() =>
-  (document.body.textContent.match(/\d+ fingers stay put|One finger stays put|Nothing stays/) || [null])[0]);
+  (document.getElementById('scroll').textContent.match(/\d+ fingers stay put|One finger stays put|Nothing stays/) || [null])[0]);
 
 await page.click('[data-act="ukeMode"][data-v="chords"]');
 await page.waitForTimeout(250);
@@ -115,6 +118,46 @@ const chords = await page.evaluate(() => ({
   chips: document.querySelectorAll('[data-act="ukeChord"]').length,
   diagrams: document.querySelectorAll('svg[role="img"]').length,
 }));
+
+// The drill: start a change, wait a known time, tap, and check the clock
+// caught it and the deck kept it.
+await page.click('[data-act="ukeMode"][data-v="drill"]');
+await page.waitForTimeout(250);
+const drillBefore = await page.evaluate(() => document.getElementById('scroll').textContent.includes('Nothing measured yet'));
+
+await page.click('[data-act="drillGo"]');
+await page.waitForTimeout(250);
+const running = await page.evaluate(() => document.getElementById('scroll').textContent.includes('The clock is running'));
+
+await page.waitForTimeout(900);
+await page.click('[data-act="drillTap"]');
+await page.waitForTimeout(250);
+
+const afterOne = await page.evaluate(() => {
+  const deck = JSON.parse(localStorage.getItem('melodyflow-drill') || '{}');
+  const cards = Object.values(deck)[0]?.cards ?? {};
+  const tried = Object.values(cards).filter((c) => c.reps > 0);
+  return {
+    verdict: /\d\.\ds · (in time|just late|too slow)/.test(document.getElementById('scroll').textContent),
+    reps: tried.length,
+    ms: tried[0]?.times[0] ?? null,
+    stillEmpty: document.getElementById('scroll').textContent.includes('Nothing measured yet'),
+  };
+});
+
+// A second change, to prove it moves on rather than repeating the same card.
+await page.click('[data-act="drillGo"]');
+await page.waitForTimeout(200);
+await page.click('[data-act="drillTap"]');
+await page.waitForTimeout(250);
+const afterTwo = await page.evaluate(() => {
+  const deck = JSON.parse(localStorage.getItem('melodyflow-drill') || '{}');
+  const cards = Object.values(deck)[0]?.cards ?? {};
+  return {
+    total: Object.values(cards).reduce((n, c) => n + c.reps, 0),
+    inWay: document.getElementById('scroll').textContent.includes('What is in your way'),
+  };
+});
 
 // And back to the drum, which must be exactly as it was.
 await page.click('[data-act="inst"][data-v="drum"]');
@@ -142,6 +185,13 @@ const checks = [
   ['the tab renames itself', changes.tab.includes('Ukulele')],
   ['the chord browser lists every shape', chords.chips === 19],
   ['the chord browser draws diagrams', chords.diagrams >= 1],
+  ['the drill starts with nothing measured', drillBefore],
+  ['the clock runs while a change is live', running],
+  ['a tap is graded against the bar', afterOne.verdict],
+  ['the time is what the clock saw', afterOne.ms >= 700 && afterOne.ms <= 2500],
+  ['the attempt is kept', afterOne.reps === 1 && !afterOne.stillEmpty],
+  ['a second attempt is recorded too', afterTwo.total === 2],
+  ['the weak list appears once there is data', afterTwo.inWay],
   ['the drum is untouched by any of it', backToDrum === 13],
   ['no page errors', errors.length === 0],
 ];
@@ -152,4 +202,5 @@ for (const [what, ok] of checks) {
   if (!ok) failed++;
 }
 if (errors.length) console.log(errors.join('\n'));
+if (failed) console.log('afterOne:', JSON.stringify(afterOne), '\nafterTwo:', JSON.stringify(afterTwo));
 process.exit(failed ? 1 : 0);

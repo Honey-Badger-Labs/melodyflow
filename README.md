@@ -39,6 +39,7 @@ still wrong.
 | `instruments.js` | The instrument model: which tokens exist, what pitches each one sounds, how it is voiced — plus the notation grammar they share. Loaded before the app, imported by the tests. |
 | `fretboard.js` | Where the fingers go, and what it costs to get there from the shape you are already holding. Searches the fretboard from the notes of the chord; holds no chord pictures. |
 | `fretboard-view.js` | Draws a chord box, and the thing chord boxes never show: the finger that is already where it needs to be. Strings in, markup out — no state, no events. |
+| `practice.js` | The drill scheduler: which change to put up next, and what your times say about it. No DOM, no audio, no clock — latencies go in as numbers. |
 | `test/` | `npm test` runs the unit tests on node's own runner, no dependencies. `npm run smoke` loads the page in a browser and skips itself if Playwright is absent. |
 | `manifest.webmanifest` | Makes it installable. |
 | `sw.js` | Offline cache, cache-first. **Bump `CACHE` inside it whenever you change a file** or stale files are served. |
@@ -93,6 +94,30 @@ The chart shape is marked and offered first, but it does not always win on
 effort, and that is not tuned away. Everyone learns E as `4 4 4 2`; `1 4 0 2` is
 genuinely easier and sounds the same. Teaching a beginner and planning a change
 are different questions, so the caller picks.
+
+### Drilling the change
+
+The third screen times you. Hold the first shape, press **Start**, make the
+change on your own ukulele, and tap the diagram when you have it. The clock
+does the grading — nobody is asked how hard it felt.
+
+Self-rating is the weak part of every spaced-repetition system, and it is
+unnecessary here, because a chord change has an honest pass mark: **the beat**.
+A bar of 4/4 at 90 is 2.7 seconds. Either the hand arrived inside it or it did
+not. Set the tempo you want to play at and the target moves with it.
+
+Spacing is counted in changes seen, not in days. Vocabulary is reviewed
+tomorrow; a chord change is drilled now, six cards later, then twenty, inside
+one sitting. The session keeps coming back to whatever is slowest, and a deck
+opens with a handful of changes rather than all of them.
+
+What comes out is a sentence worth having:
+
+> 3 of 4 changes are in time at 90. **Am → F** is what is holding the tempo down.
+
+A learner cannot feel the difference between their second-worst and
+fourth-worst change. The clock can, and that is the whole reason any of this
+is measured. Times are kept per change, per progression, on your device.
 
 ### Seeing the change
 

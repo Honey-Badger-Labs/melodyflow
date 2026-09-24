@@ -57,6 +57,7 @@ input[type=range]{accent-color:var(--color-accent);background:transparent}
 <script src="instruments.js"></script>
 <script src="fretboard.js"></script>
 <script src="fretboard-view.js"></script>
+<script src="practice.js"></script>
 <script>
 "use strict";
 /* ════════════════════════════════════════════════════════════════════════
@@ -161,6 +162,7 @@ const App = {
     armed:false, armScope:null, armItems:[], armIdx:0,
     drumMode:'free', drone:false, rec:'idle', hasCap:false, book:'score',
     inst:'drum', ukeMode:'changes', ukeChord:'C', progId:'fifties', step:1,
+    drillBpm:90, drillKey:null, drillLive:false, drillLast:null,
     edNotes:[], edTitle:'', edSub:'', sel:0, rot:0,
     tapMsg:'Terminator is really in 13/8. Tap four bars and I will re-bar it.'
   },
@@ -169,15 +171,19 @@ const App = {
   load(){
     try{
       const s=JSON.parse(localStorage.getItem('melodyflow')||'{}');
-      ['songId','line','tempo','rot','mode','drumMode','filter','book'].forEach(k=>{
+      ['songId','line','tempo','rot','mode','drumMode','filter','book','inst','ukeMode','ukeChord','progId','drillBpm'].forEach(k=>{
         if(s[k]!==undefined) this.state[k]=s[k];
       });
+      // The decks are kept apart: they are the only thing here a learner would
+      // be sorry to lose, and they grow, while everything above is a toggle.
+      this.decks=JSON.parse(localStorage.getItem('melodyflow-drill')||'{}');
       if(!SONGS.some(x=>x.id===this.state.songId)){ this.state.songId='twinkle'; this.state.line=0; }
     }catch(e){}
   },
   save(){
-    const s=this.state, keep={songId:s.songId,line:s.line,tempo:s.tempo,rot:s.rot,mode:s.mode,drumMode:s.drumMode,filter:s.filter,book:s.book};
+    const s=this.state, keep={songId:s.songId,line:s.line,tempo:s.tempo,rot:s.rot,mode:s.mode,drumMode:s.drumMode,filter:s.filter,book:s.book,inst:s.inst,ukeMode:s.ukeMode,ukeChord:s.ukeChord,progId:s.progId,drillBpm:s.drillBpm};
     try{ localStorage.setItem('melodyflow',JSON.stringify(keep)); }catch(e){}
+    try{ localStorage.setItem('melodyflow-drill',JSON.stringify(this.decks||{})); }catch(e){}
   },
 
   setState(patch){ Object.assign(this.state,patch); this.render(); this.save(); },
@@ -214,6 +220,40 @@ const App = {
     const p=this.prog();
     if(this._pathId!==p.id){ this._pathId=p.id; this._path=MF.instrument('ukulele').easiestPath(p.chords); }
     return this._path;
+  },
+  /* One deck per progression, kept across sessions. A deck outlives a tempo
+     change: the times stand, the pass mark moves. */
+  deck(){
+    const id=this.state.progId;
+    this.decks=this.decks||{};
+    if(!this.decks[id]) this.decks[id]=MF_PRACTICE.deckFor(this.prog().chords,{bpm:this.state.drillBpm});
+    this.decks[id].bpm=this.state.drillBpm;
+    return this.decks[id];
+  },
+  /* The two shapes for a change, taken from the solved progression so the
+     drill teaches the same fingers the Changes screen showed. */
+  drillPair(k){
+    const n=this.progPath(); if(!n) return null;
+    const cs=this.prog().chords;
+    for(let i=0;i<cs.length;i++){
+      if(cs[i]+'>'+cs[(i+1)%cs.length]===k) return [n.shapes[i],n.shapes[(i+1)%cs.length]];
+    }
+    return null;
+  },
+  drillNext(){
+    const k=MF_PRACTICE.next(this.deck());
+    this._shownAt=performance.now();
+    this.setState({drillKey:k,drillLive:true});
+  },
+  drillTap(){
+    const st=this.state;
+    if(!st.drillLive||!st.drillKey) return this.drillNext();
+    const ms=Math.round(performance.now()-this._shownAt);
+    const d=this.deck(), target=MF_PRACTICE.targetMs(d.bpm,d.beats);
+    this.decks[st.progId]=MF_PRACTICE.record(d,st.drillKey,ms);
+    const pair=this.drillPair(st.drillKey);
+    if(pair) this.playToken('ukulele',pair[1].chord,'d');
+    this.setState({drillLive:false,drillLast:{key:st.drillKey,ms,verdict:MF_PRACTICE.grade(ms,target)}});
   },
   strike(p){
     this.tone(hz(p),1.6);
@@ -496,7 +536,7 @@ const App = {
      this chord go, and how do I get to the next one in time. */
   screenUke(){
     const st=this.state, V=MF_FRETBOARD_VIEW, uke=MF.instrument('ukulele');
-    const modes=[['changes','Changes',32,12],['chords','Chords',32,12]];
+    const modes=[['changes','Changes',32,12],['chords','Chords',32,12],['drill','Drill',32,12]];
     const head=`<div style="padding:0 4px">
         <div style="font:600 9.5px/1 ui-monospace,Menlo,monospace;letter-spacing:.22em;text-transform:uppercase;color:var(--color-neutral-600)">Soprano · G C E A</div>
         <div style="font:500 25px/1.1 var(--font-heading);letter-spacing:-.02em;margin-top:6px">The ukulele</div>
@@ -520,6 +560,57 @@ const App = {
           <div style="font:600 9.5px ui-monospace,Menlo,monospace;letter-spacing:.18em;text-transform:uppercase;color:var(--color-neutral-600)">Other ways to play it</div>
           <div style="display:flex;gap:9px;margin-top:9px">${alts.map(a=>`<div style="flex:1;padding:8px;border-radius:var(--radius-md);border:1px solid var(--color-neutral-900);background:var(--color-surface)">${V.chord(a,{label:false})}<div style="text-align:center;font:400 10px ui-monospace,Menlo,monospace;color:var(--color-neutral-600);margin-top:3px">${a.frets.join(' ')}</div></div>`).join('')}</div>
         </div>`:''}`;
+    } else if(st.ukeMode==='drill'){
+      const P=MF_PRACTICE, deck=this.deck(), target=P.targetMs(deck.bpm,deck.beats);
+      const k=st.drillKey||P.next(deck), pair=this.drillPair(k);
+      const worst=P.weakest(deck), ready=P.readiness(deck);
+      const last=st.drillLast;
+      const tempos=[[60,'60'],[75,'75'],[90,'90'],[110,'110'],[130,'130']]
+        .map(t=>`<button data-act="drillBpm" data-v="${t[0]}" style="flex:1;height:30px;border-radius:var(--radius-sm);border:0;cursor:pointer;font:500 11.5px Inter,sans-serif;background:${deck.bpm===t[0]?'#423a6a':'transparent'};color:${deck.bpm===t[0]?'#e7e5fe':'#75798c'}">${t[1]}</button>`).join('');
+
+      const verdictCol=last? (last.verdict==='good'?'#8fd0b4':last.verdict==='close'?'#e6ca9c':'#e0a8b0') : 'var(--color-neutral-600)';
+      const verdictTxt=last? (last.verdict==='good'?'in time':last.verdict==='close'?'just late':'too slow') : '';
+
+      body=`<div style="display:flex;align-items:center;gap:9px;margin-top:13px">
+          <span style="font:600 9.5px ui-monospace,Menlo,monospace;letter-spacing:.18em;text-transform:uppercase;color:var(--color-neutral-600);flex:none">Aiming for</span>
+          <div style="flex:1;display:flex;gap:4px;padding:3px;border-radius:var(--radius-md);background:#292b31;border:1px solid var(--color-neutral-800)">${tempos}</div>
+        </div>
+        <div style="margin-top:6px;font:400 11.5px/1.5 Inter,sans-serif;color:var(--color-neutral-600)">One bar at ${deck.bpm} is ${(target/1000).toFixed(1)}s. That is the change, not the chord.</div>
+
+        <div style="margin-top:13px;padding:14px;border-radius:var(--radius-lg);border:1px solid var(--color-neutral-900);background:var(--color-surface)">
+          ${pair?`<div style="display:flex;align-items:center;gap:10px">
+            <div style="flex:none;width:76px;opacity:.5">${V.chord(pair[0],{label:pair[0].chord})}</div>
+            <div style="flex:none;color:var(--color-neutral-700);font:400 16px Inter,sans-serif">→</div>
+            <div data-act="drillTap" style="flex:1;min-width:0;cursor:pointer;border-radius:var(--radius-md);padding:6px;border:1px solid ${st.drillLive?'var(--color-accent)':'transparent'};background:${st.drillLive?'#241f3d':'transparent'}">${V.chord(pair[1],{from:pair[0],label:pair[1].chord})}</div>
+          </div>`:'<div style="color:var(--color-neutral-500);font:400 13px Inter,sans-serif">Nothing to drill in this progression.</div>'}
+
+          <div style="margin-top:11px;text-align:center;min-height:38px">
+            ${st.drillLive
+              ? `<div style="font:500 13px Inter,sans-serif;color:var(--color-accent-200)">Make the shape, then tap it.</div>
+                 <div style="font:400 11px Inter,sans-serif;color:var(--color-neutral-600);margin-top:3px">The clock is running.</div>`
+              : last
+                ? `<div style="font:500 15px Inter,sans-serif;color:${verdictCol}">${(last.ms/1000).toFixed(1)}s · ${verdictTxt}</div>
+                   <div style="font:400 11px Inter,sans-serif;color:var(--color-neutral-600);margin-top:3px">${esc(last.key.replace('>',' → '))}</div>`
+                : `<div style="font:400 12px Inter,sans-serif;color:var(--color-neutral-600);text-wrap:pretty">Hold the first shape. Start when you are ready, change on the tap.</div>`}
+          </div>
+
+          <button data-act="${st.drillLive?'drillTap':'drillGo'}" style="width:100%;height:42px;margin-top:4px;border-radius:var(--radius-md);border:1px solid var(--color-accent);background:${st.drillLive?'var(--color-accent)':'transparent'};color:${st.drillLive?'#171927':'var(--color-accent-200)'};font:600 13.5px Inter,sans-serif;cursor:pointer">${st.drillLive?'I have it':(last?'Next change':'Start')}</button>
+        </div>
+
+        <div style="margin-top:13px;padding:13px 14px;border-radius:var(--radius-lg);border:1px solid var(--color-neutral-900);background:var(--color-surface)">
+          <div style="font:600 9.5px ui-monospace,Menlo,monospace;letter-spacing:.18em;text-transform:uppercase;color:var(--color-neutral-600)">What is in your way</div>
+          ${worst.length? `<div style="margin-top:10px;display:flex;flex-direction:column;gap:7px">${worst.map(c=>`
+            <div style="display:flex;align-items:center;gap:9px">
+              <span style="flex:none;width:74px;font:500 12.5px Inter,sans-serif;color:${c.ready?'var(--color-neutral-500)':'#e2e5f0'}">${esc(c.from)} → ${esc(c.to)}</span>
+              <div style="flex:1;height:6px;border-radius:3px;background:#292b31;overflow:hidden"><div style="height:100%;width:${Math.min(100,Math.round((c.pace/(target*2))*100))}%;background:${c.ready?'#8fd0b4':'#9184d9'}"></div></div>
+              <span style="flex:none;font:400 11px ui-monospace,Menlo,monospace;color:${c.ready?'#8fd0b4':'var(--color-neutral-500)'}">${(c.pace/1000).toFixed(1)}s</span>
+            </div>`).join('')}</div>
+            <div style="margin-top:11px;font:400 12px/1.55 Inter,sans-serif;color:var(--color-neutral-500);text-wrap:pretty">${ready.blocker
+              ? `${ready.ready} of ${ready.total} changes are in time at ${deck.bpm}. <span style="color:#e2e5f0">${esc(ready.blocker.from)} → ${esc(ready.blocker.to)}</span> is what is holding the tempo down.`
+              : ready.tried<ready.total? `${ready.ready} of ${ready.total} in time. ${ready.total-ready.tried} not tried yet.`
+              : `Every change is inside the bar at ${deck.bpm}. Put the tempo up.`}</div>`
+          : '<div style="margin-top:9px;font:400 12.5px/1.6 Inter,sans-serif;color:var(--color-neutral-500);text-wrap:pretty">Nothing measured yet. The drill keeps your times per change and comes back to the slow ones — it is the changes that hold a song back, not the chords.</div>'}
+        </div>`;
     } else {
       const prog=this.prog(), solved=this.progPath();
       const picks=PROGS.map(p=>`<button data-act="prog" data-v="${p.id}" style="height:30px;padding:0 11px;border-radius:var(--radius-sm);border:1px solid ${p.id===st.progId?'var(--color-accent)':'var(--color-neutral-800)'};background:${p.id===st.progId?'#3b336b':'var(--color-surface)'};color:${p.id===st.progId?'#e7e5fe':'var(--color-neutral-400)'};font:500 11.5px Inter,sans-serif;cursor:pointer;white-space:nowrap">${esc(p.name)}</button>`).join('');
@@ -783,7 +874,10 @@ const App = {
       case 'ukeMode': this.setState({ukeMode:ds.v}); break;
       case 'ukeChord': this.setState({ukeChord:ds.v}); this.playToken('ukulele',ds.v); break;
       case 'hearChord': this.playToken('ukulele',ds.v); break;
-      case 'prog': this.setState({progId:ds.v,step:1}); break;
+      case 'prog': this.setState({progId:ds.v,step:1,drillKey:null,drillLive:false,drillLast:null}); break;
+      case 'drillBpm': this.setState({drillBpm:+ds.v}); break;
+      case 'drillGo': this.drillNext(); break;
+      case 'drillTap': this.drillTap(); break;
       case 'stepBack': { const n=this.progPath(); if(n) this.setState({step:Math.max(1,st.step-1)}); } break;
       case 'stepOn': { const n=this.progPath(); if(n) this.setState({step:Math.min(n.shapes.length-1,st.step+1)}); } break;
       case 'hearChange': { // the shape you leave, then the one you arrive at
