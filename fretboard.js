@@ -158,8 +158,25 @@
   */
   function restCost(shape) {
     if (shape.fingers === 0) return 0;
-    const position = Math.min(...shape.placements.map((p) => p.fret));
-    return shape.fingers + (shape.barre ? 1.5 : 0) + position * 0.25;
+    const low = Math.min(...shape.placements.map((p) => p.fret));
+    // In first position the hand sits at the nut whatever the shape reaches,
+    // which is why open-chord fingerings are counted from fret 1 and not from
+    // the lowest note held.
+    const position = low <= MAX_SPAN ? 1 : low;
+
+    /**
+     * One finger per fret: the index takes the first fret of the position,
+     * the middle the second, and so on. It is how these shapes are taught and
+     * how a hand stays relaxed, and without it nothing distinguishes the four
+     * ways to hold a one-finger chord — C came out under the index finger
+     * rather than the ring, which is not what anybody plays.
+     */
+    const awkward = shape.placements.reduce((sum, p) => {
+      const want = Math.min(4, Math.max(1, p.fret - position + 1));
+      return sum + Math.abs(p.finger - want);
+    }, 0);
+
+    return shape.fingers + (shape.barre ? 1.5 : 0) + position * 0.25 + awkward * 0.3;
   }
 
   /**

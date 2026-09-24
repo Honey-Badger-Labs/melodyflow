@@ -91,6 +91,36 @@ await page.click('[data-act="openSong"]');
 await page.waitForTimeout(300);
 const pads = await page.evaluate(() => document.querySelectorAll('[data-act="strike"]').length);
 
+// Over to the ukulele, and through both of its screens.
+await page.click('[data-act="tab"][data-v="drum"]');
+await page.waitForTimeout(200);
+await page.click('[data-act="inst"][data-v="ukulele"]');
+await page.waitForTimeout(250);
+
+const changes = await page.evaluate(() => ({
+  diagrams: document.querySelectorAll('svg[role="img"]').length,
+  anchorsShown: document.body.innerHTML.includes('#8fd0b4'),
+  note: (document.body.textContent.match(/\d+ fingers stay put|One finger stays put|Nothing stays/) || [null])[0],
+  tab: document.querySelector('#tabbar [data-act="tab"][data-v="drum"]').textContent.replace(/\s+/g, ''),
+}));
+
+await page.click('[data-act="stepOn"]');
+await page.waitForTimeout(200);
+const stepped = await page.evaluate(() =>
+  (document.body.textContent.match(/\d+ fingers stay put|One finger stays put|Nothing stays/) || [null])[0]);
+
+await page.click('[data-act="ukeMode"][data-v="chords"]');
+await page.waitForTimeout(250);
+const chords = await page.evaluate(() => ({
+  chips: document.querySelectorAll('[data-act="ukeChord"]').length,
+  diagrams: document.querySelectorAll('svg[role="img"]').length,
+}));
+
+// And back to the drum, which must be exactly as it was.
+await page.click('[data-act="inst"][data-v="drum"]');
+await page.waitForTimeout(250);
+const backToDrum = await page.evaluate(() => document.querySelectorAll('[data-act="strike"]').length);
+
 await browser.close();
 server.close();
 
@@ -105,6 +135,14 @@ const checks = [
   ['the fretboard reached the page', probe.fretboard === 'object'],
   ['C is the shape off the chart', JSON.stringify(probe.chartC) === '[0,0,0,3]'],
   ['a progression solves in the browser', probe.path === 4],
+  ['the change view draws both shapes', changes.diagrams >= 2],
+  ['anchored fingers are marked', changes.anchorsShown],
+  ['the change is named in words', changes.note !== null],
+  ['stepping on shows a different change', stepped !== null],
+  ['the tab renames itself', changes.tab.includes('Ukulele')],
+  ['the chord browser lists every shape', chords.chips === 19],
+  ['the chord browser draws diagrams', chords.diagrams >= 1],
+  ['the drum is untouched by any of it', backToDrum === 13],
   ['no page errors', errors.length === 0],
 ];
 

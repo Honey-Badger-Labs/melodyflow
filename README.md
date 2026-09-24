@@ -9,8 +9,8 @@ each one sounds and how it is voiced; notation, timing and the guided practice
 loop are shared. A ukulele is the second instrument defined through it — a chord
 is four strings at once, which is why a beat now holds more than one pitch, and a
 strum has a direction, which is why an articulation sits on the beat rather than
-on the chord. The model and its audio are built and tested; **the fretboard views
-are not, so the app still opens on the drum.**
+on the chord. Both are playable: the drum keeps its pad wheel, and the ukulele has chord
+diagrams that show **which finger stays put** through a change.
 
 This is the **Nocturne redesign** of MelodyFlow, implemented as a real standalone
 app from the `MelodyFlow.dc.html` Claude Design prototype. It regroups everything
@@ -38,6 +38,7 @@ still wrong.
 | `index.html` | The app — engine, 13 arrangements, songbook, register, capture, editor. Vanilla JS, no build step. |
 | `instruments.js` | The instrument model: which tokens exist, what pitches each one sounds, how it is voiced — plus the notation grammar they share. Loaded before the app, imported by the tests. |
 | `fretboard.js` | Where the fingers go, and what it costs to get there from the shape you are already holding. Searches the fretboard from the notes of the chord; holds no chord pictures. |
+| `fretboard-view.js` | Draws a chord box, and the thing chord boxes never show: the finger that is already where it needs to be. Strings in, markup out — no state, no events. |
 | `test/` | `npm test` runs the unit tests on node's own runner, no dependencies. `npm run smoke` loads the page in a browser and skips itself if Playwright is absent. |
 | `manifest.webmanifest` | Makes it installable. |
 | `sw.js` | Offline cache, cache-first. **Bump `CACHE` inside it whenever you change a file** or stale files are served. |
@@ -92,6 +93,16 @@ The chart shape is marked and offered first, but it does not always win on
 effort, and that is not tuned away. Everyone learns E as `4 4 4 2`; `1 4 0 2` is
 genuinely easier and sounds the same. Teaching a beginner and planning a change
 are different questions, so the caller picks.
+
+### Seeing the change
+
+The Ukulele tab has two screens. **Chords** browses every shape, the one
+everybody learns first and the other voicings under it. **Changes** takes a
+progression, solves it, and walks you through it one change at a time.
+
+A finger drawn in mint with a ring round it is already where it needs to be.
+That is the whole trick, and it is the one thing a printed chord chart cannot
+tell you, because it draws each shape as though you arrived from nowhere.
 
 ## Notation
 

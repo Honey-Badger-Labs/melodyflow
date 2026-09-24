@@ -56,6 +56,7 @@ input[type=range]{accent-color:var(--color-accent);background:transparent}
 
 <script src="instruments.js"></script>
 <script src="fretboard.js"></script>
+<script src="fretboard-view.js"></script>
 <script>
 "use strict";
 /* ════════════════════════════════════════════════════════════════════════
@@ -121,6 +122,17 @@ const SONGS=[
     L('Opening','5 .1*2 | 7 .1 5'),L('Answer','6 5*2 | 3*3')]}
 ];
 
+/* Progressions, not songs: what a learner actually drills. Each is solved
+   for the cheapest way through it, so the shapes shown are the ones that
+   keep the most fingers down — which is not what a chord chart prints. */
+const PROGS=[
+  {id:'fifties', name:'The fifties turnaround', sub:'Heart and Soul, Stand By Me, half of doo-wop', chords:['C','Am','F','G7']},
+  {id:'three',   name:'Three chords',           sub:'Where nearly every folk song lives',          chords:['C','F','G7','C']},
+  {id:'pop',     name:'The pop four',           sub:'Axis of Awesome, and you know the rest',      chords:['Am','F','C','G']},
+  {id:'gfamily', name:'The G family',           sub:'Friendlier shapes, one barre to dodge',       chords:['G','Em','C','D7']},
+  {id:'minor',   name:'A minor turn',           sub:'Slower songs, and the sound of a sad uke',    chords:['Am','Dm','G7','C']}
+];
+
 const REGISTER=[
   {t:'Scarborough Fair',v:'in',r:'Dorian, so home is 2 rather than 1. Sits inside C4–D5 with nothing changed.'},
   {t:'Old MacDonald Had a Farm',v:'corrected',r:'Corrected, not adapted — "had a farm" drops below the tonic to 5. 6. 6. 5. An earlier version had it an octave too high.'},
@@ -148,6 +160,7 @@ const App = {
     cur:-1, playing:false, playScope:null, beat:0, lit:null, tempo:84, mode:'guided',
     armed:false, armScope:null, armItems:[], armIdx:0,
     drumMode:'free', drone:false, rec:'idle', hasCap:false, book:'score',
+    inst:'drum', ukeMode:'changes', ukeChord:'C', progId:'fifties', step:1,
     edNotes:[], edTitle:'', edSub:'', sel:0, rot:0,
     tapMsg:'Terminator is really in 13/8. Tap four bars and I will re-bar it.'
   },
@@ -172,19 +185,35 @@ const App = {
   /* ---- audio ---- */
   ac(){ if(!this._ac) this._ac=new (window.AudioContext||window.webkitAudioContext)();
         if(this._ac.state==='suspended') this._ac.resume(); return this._ac; },
-  tone(f,dur){
+  tone(f,dur,gain,partials){
     try{
       const ac=this.ac(), t=ac.currentTime, g=ac.createGain();
       g.connect(ac.destination);
       g.gain.setValueAtTime(0.0001,t);
-      g.gain.exponentialRampToValueAtTime(0.22,t+0.006);
+      g.gain.exponentialRampToValueAtTime(0.22*(gain===undefined?1:gain),t+0.006);
       g.gain.exponentialRampToValueAtTime(0.0001,t+dur);
-      [[1,1],[2.02,0.3],[3.01,0.1],[5.43,0.035]].forEach(m=>{
+      (partials||[[1,1],[2.02,0.3],[3.01,0.1],[5.43,0.035]]).forEach(m=>{
         const o=ac.createOscillator(), gg=ac.createGain();
         o.type='sine'; o.frequency.value=f*m[0]; gg.gain.value=m[1];
         o.connect(gg); gg.connect(g); o.start(t); o.stop(t+dur);
       });
     }catch(e){}
+  },
+  /* A token on any instrument: one strike for a pad, four fanned out for a
+     strum. The offsets are the instrument's, not this function's. */
+  playToken(instId,tok,art){
+    const inst=MF.instrument(instId);
+    MF.strikes(inst,{tok,dur:1,art:art||null}).forEach(k=>{
+      const fire=()=>this.tone(k.hz,k.ring,k.gain,inst.voice.partials);
+      k.atMs? setTimeout(fire,k.atMs) : fire();
+    });
+  },
+  /* The chords of a progression, in the order the solver chose them. */
+  prog(){ return PROGS.find(p=>p.id===this.state.progId)||PROGS[0]; },
+  progPath(){
+    const p=this.prog();
+    if(this._pathId!==p.id){ this._pathId=p.id; this._path=MF.instrument('ukulele').easiestPath(p.chords); }
+    return this._path;
   },
   strike(p){
     this.tone(hz(p),1.6);
@@ -457,7 +486,68 @@ const App = {
     </div>`;
   },
 
+  instSwitch(){
+    const st=this.state;
+    return `<div style="display:flex;gap:5px;margin-top:2px;padding:3px;border-radius:var(--radius-md);background:#292b31;border:1px solid var(--color-neutral-800)">${
+      this.seg([['drum','Tongue drum',32,12],['ukulele','Ukulele',32,12]],st.inst,'inst')}</div>`;
+  },
+
+  /* The ukulele surface. Two questions a learner actually has: where does
+     this chord go, and how do I get to the next one in time. */
+  screenUke(){
+    const st=this.state, V=MF_FRETBOARD_VIEW, uke=MF.instrument('ukulele');
+    const modes=[['changes','Changes',32,12],['chords','Chords',32,12]];
+    const head=`<div style="padding:0 4px">
+        <div style="font:600 9.5px/1 ui-monospace,Menlo,monospace;letter-spacing:.22em;text-transform:uppercase;color:var(--color-neutral-600)">Soprano · G C E A</div>
+        <div style="font:500 25px/1.1 var(--font-heading);letter-spacing:-.02em;margin-top:6px">The ukulele</div>
+      </div>
+      ${this.instSwitch()}
+      <div style="display:flex;gap:5px;margin-top:9px;padding:3px;border-radius:var(--radius-md);background:#292b31;border:1px solid var(--color-neutral-800)">${this.seg(modes,st.ukeMode,'ukeMode')}</div>`;
+
+    let body='';
+    if(st.ukeMode==='chords'){
+      const shapes=uke.shapesFor(st.ukeChord);
+      const chips=uke.tokens.map(c=>`<button data-act="ukeChord" data-v="${c}" style="height:32px;padding:0 11px;border-radius:var(--radius-sm);border:1px solid ${c===st.ukeChord?'var(--color-accent)':'var(--color-neutral-800)'};background:${c===st.ukeChord?'#3b336b':'var(--color-surface)'};color:${c===st.ukeChord?'#e7e5fe':'var(--color-neutral-400)'};font:500 12.5px Inter,sans-serif;cursor:pointer">${c}</button>`).join('');
+      const main=shapes[0];
+      const seen=new Set([shapes[0]&&shapes[0].frets.join()]);
+      const alts=shapes.filter(x=>{ const k=x.frets.join(); if(seen.has(k)) return false; seen.add(k); return true; }).slice(0,3);
+      body=`<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:13px">${chips}</div>
+        <div data-act="hearChord" data-v="${st.ukeChord}" style="margin-top:14px;padding:14px;border-radius:var(--radius-lg);border:1px solid var(--color-neutral-900);background:var(--color-surface);cursor:pointer">
+          <div style="max-width:190px;margin:0 auto">${main?V.chord(main,{}):''}</div>
+          <div style="text-align:center;margin-top:6px;font:400 11.5px Inter,sans-serif;color:var(--color-neutral-600)">${main&&main.canonical?'The shape everyone learns':'The easiest shape found'} · tap to hear it</div>
+        </div>
+        ${alts.length?`<div style="margin-top:13px">
+          <div style="font:600 9.5px ui-monospace,Menlo,monospace;letter-spacing:.18em;text-transform:uppercase;color:var(--color-neutral-600)">Other ways to play it</div>
+          <div style="display:flex;gap:9px;margin-top:9px">${alts.map(a=>`<div style="flex:1;padding:8px;border-radius:var(--radius-md);border:1px solid var(--color-neutral-900);background:var(--color-surface)">${V.chord(a,{label:false})}<div style="text-align:center;font:400 10px ui-monospace,Menlo,monospace;color:var(--color-neutral-600);margin-top:3px">${a.frets.join(' ')}</div></div>`).join('')}</div>
+        </div>`:''}`;
+    } else {
+      const prog=this.prog(), solved=this.progPath();
+      const picks=PROGS.map(p=>`<button data-act="prog" data-v="${p.id}" style="height:30px;padding:0 11px;border-radius:var(--radius-sm);border:1px solid ${p.id===st.progId?'var(--color-accent)':'var(--color-neutral-800)'};background:${p.id===st.progId?'#3b336b':'var(--color-surface)'};color:${p.id===st.progId?'#e7e5fe':'var(--color-neutral-400)'};font:500 11.5px Inter,sans-serif;cursor:pointer;white-space:nowrap">${esc(p.name)}</button>`).join('');
+      if(!solved){ body='<div style="margin-top:14px;color:var(--color-neutral-500);font:400 13px Inter,sans-serif">That progression has a chord this fretboard cannot reach.</div>'; }
+      else{
+        const i=Math.min(Math.max(st.step,1),solved.shapes.length-1);
+        const from=solved.shapes[i-1], to=solved.shapes[i];
+        const cost=MF_FRETBOARD.transitionCost(from,to);
+        const ladder=solved.shapes.map((sh,k)=>`<span style="font:500 12.5px Inter,sans-serif;color:${k===i||k===i-1?'#e7e5fe':'var(--color-neutral-700)'}">${sh.chord}</span>`).join('<span style="color:var(--color-neutral-800);margin:0 6px">→</span>');
+        body=`<div style="display:flex;gap:6px;margin-top:13px;overflow-x:auto;padding-bottom:2px">${picks}</div>
+          <div style="margin-top:6px;font:400 11.5px/1.5 Inter,sans-serif;color:var(--color-neutral-600);text-wrap:pretty">${esc(prog.sub)}</div>
+          <div style="margin-top:13px;padding:14px;border-radius:var(--radius-lg);border:1px solid var(--color-neutral-900);background:var(--color-surface)">
+            <div style="text-align:center;margin-bottom:11px">${ladder}</div>
+            ${V.change(from,to,{cost})}
+            <div style="display:flex;gap:8px;margin-top:13px">
+              <button data-act="stepBack" style="flex:none;width:40px;height:36px;border-radius:var(--radius-md);border:1px solid var(--color-neutral-800);background:transparent;color:var(--color-neutral-400);cursor:pointer">‹</button>
+              <button data-act="hearChange" style="flex:1;height:36px;border-radius:var(--radius-md);border:1px solid var(--color-accent);background:transparent;color:var(--color-accent-200);font:500 12.5px Inter,sans-serif;cursor:pointer">Hear the change</button>
+              <button data-act="stepOn" style="flex:none;width:40px;height:36px;border-radius:var(--radius-md);border:1px solid var(--color-neutral-800);background:transparent;color:var(--color-neutral-400);cursor:pointer">›</button>
+            </div>
+          </div>
+          <div style="margin-top:12px;font:400 12.5px/1.6 Inter,sans-serif;color:var(--color-neutral-500);text-wrap:pretty">Shapes are chosen for the whole progression, not one chord at a time, so the fingers that can stay down do. A mint finger is already where it needs to be — leave it there.</div>`;
+      }
+    }
+    return `<div style="padding:0 16px 14px">${head}${body}</div>`;
+  },
+
   screenDrum(){
+    if(this.state.inst==='ukulele') return this.screenUke();
     const st=this.state;
     const rotSteps=Math.round((PROPS.drumRotation+st.rot)/30);
     const pads=this.padList({dim:st.drumMode==='drone'?PENT:null,rot:rotSteps,px:334});
@@ -490,7 +580,8 @@ const App = {
           <button data-act="rotR" style="width:34px;height:34px;border-radius:var(--radius-md);border:1px solid var(--color-neutral-800);background:var(--color-surface);color:var(--color-neutral-400);cursor:pointer;font-size:14px">↻</button>
         </div>
       </div>
-      <div style="display:flex;gap:5px;margin-top:15px;padding:3px;border-radius:var(--radius-md);background:#292b31;border:1px solid var(--color-neutral-800)">${this.seg(drumModes,st.drumMode,'drumMode')}</div>
+      ${this.instSwitch()}
+      <div style="display:flex;gap:5px;margin-top:9px;padding:3px;border-radius:var(--radius-md);background:#292b31;border:1px solid var(--color-neutral-800)">${this.seg(drumModes,st.drumMode,'drumMode')}</div>
       <div style="padding:12px 0">${this.wheel(pads,'min(86vw, 336px)')}</div>
       <div style="padding:0 2px 12px">
         <div style="font:400 12.5px/1.6 Inter,sans-serif;color:var(--color-neutral-500);text-wrap:pretty">${blurb}</div>
@@ -642,7 +733,7 @@ const App = {
 
   tabbar(){
     const st=this.state;
-    const tabs=[['play','Play','◉'],['drum','Drum','◍'],['capture','Capture','◐'],['book','Book','▤']];
+    const tabs=[['play','Play','◉'],['drum',st.inst==='ukulele'?'Ukulele':'Drum','◍'],['capture','Capture','◐'],['book','Book','▤']];
     return tabs.map(t=>`<button data-act="tab" data-v="${t[0]}" style="flex:1;display:flex;flex-direction:column;align-items:center;gap:5px;border:0;background:none;cursor:pointer;padding:4px 0;color:${st.tab===t[0]?'#d2cefd':'#595d6c'}">
       <span style="font-size:16px;line-height:1">${t[2]}</span><span style="font:500 10px Inter,sans-serif">${t[1]}</span></button>`).join('');
   },
@@ -688,6 +779,19 @@ const App = {
       case 'prevLine': this.stop(); this.setState({line:Math.max(0,st.line-1),cur:-1}); break;
       case 'nextLine': this.stop(); this.setState({line:Math.min(s.lines.length-1,st.line+1),cur:-1}); break;
       case 'drumMode': this.setState({drumMode:ds.v}); break;
+      case 'inst': this.stop(); this.setState({inst:ds.v,tab:'drum',screen:'drum'}); break;
+      case 'ukeMode': this.setState({ukeMode:ds.v}); break;
+      case 'ukeChord': this.setState({ukeChord:ds.v}); this.playToken('ukulele',ds.v); break;
+      case 'hearChord': this.playToken('ukulele',ds.v); break;
+      case 'prog': this.setState({progId:ds.v,step:1}); break;
+      case 'stepBack': { const n=this.progPath(); if(n) this.setState({step:Math.max(1,st.step-1)}); } break;
+      case 'stepOn': { const n=this.progPath(); if(n) this.setState({step:Math.min(n.shapes.length-1,st.step+1)}); } break;
+      case 'hearChange': { // the shape you leave, then the one you arrive at
+        const n=this.progPath(); if(!n) break;
+        const i=Math.min(Math.max(st.step,1),n.shapes.length-1);
+        this.playToken('ukulele',n.shapes[i-1].chord);
+        setTimeout(()=>this.playToken('ukulele',n.shapes[i].chord,'d'),850);
+      } break;
       case 'rotL': this.setState({rot:st.rot-30}); break;
       case 'rotR': this.setState({rot:st.rot+30}); break;
       case 'toggleDrone': { const on=!st.drone; this.setState({drone:on}); if(on) this.tone(hz('1')/2,7); } break;
