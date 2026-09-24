@@ -179,6 +179,25 @@
      */
     articulations: ['d', 'u', 'x'],
     voice: { partials: [[1, 1], [2, 0.22], [3, 0.08]], spreadMs: 22, ring: 1.1 },
+
+    /**
+     * Where to put the fingers, and what it costs to get there from what you
+     * are already holding. Looked up when asked rather than held as a
+     * reference, so fretboard.js may load in either order or not at all — the
+     * audio and the songbook do not need it.
+     */
+    shapesFor(name) {
+      const fb = root.MF_FRETBOARD;
+      return fb ? fb.shapesFor(name, UKE_OPEN, UKE_SHAPES[name]) : [];
+    },
+    shapesAfter(name, from) {
+      const fb = root.MF_FRETBOARD;
+      return fb ? fb.shapesAfter(name, from, UKE_OPEN, UKE_SHAPES[name]) : [];
+    },
+    easiestPath(names) {
+      const fb = root.MF_FRETBOARD;
+      return fb ? fb.easiestPath(names, UKE_OPEN) : null;
+    },
   };
 
   const INSTRUMENTS = { drum, ukulele };

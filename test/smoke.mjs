@@ -82,6 +82,9 @@ const probe = await page.evaluate(() => ({
   ukeChord: globalThis.MF?.instrument('ukulele').pitches('C').length,
   songs: document.querySelectorAll('[data-act="openSong"]').length,
   tabs: document.querySelectorAll('#tabbar [data-act="tab"]').length,
+  fretboard: typeof globalThis.MF_FRETBOARD,
+  chartC: globalThis.MF?.instrument('ukulele').shapesFor('C')[0]?.frets,
+  path: globalThis.MF?.instrument('ukulele').easiestPath(['C', 'Am', 'F', 'G7'])?.shapes.length,
 }));
 
 await page.click('[data-act="openSong"]');
@@ -99,6 +102,9 @@ const checks = [
   ['the songbook rendered', probe.songs >= 13],
   ['the tab bar rendered', probe.tabs === 4],
   ['a song opens onto the drum', pads === 13],
+  ['the fretboard reached the page', probe.fretboard === 'object'],
+  ['C is the shape off the chart', JSON.stringify(probe.chartC) === '[0,0,0,3]'],
+  ['a progression solves in the browser', probe.path === 4],
   ['no page errors', errors.length === 0],
 ];
 

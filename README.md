@@ -37,6 +37,7 @@ still wrong.
 |---|---|
 | `index.html` | The app — engine, 13 arrangements, songbook, register, capture, editor. Vanilla JS, no build step. |
 | `instruments.js` | The instrument model: which tokens exist, what pitches each one sounds, how it is voiced — plus the notation grammar they share. Loaded before the app, imported by the tests. |
+| `fretboard.js` | Where the fingers go, and what it costs to get there from the shape you are already holding. Searches the fretboard from the notes of the chord; holds no chord pictures. |
 | `test/` | `npm test` runs the unit tests on node's own runner, no dependencies. `npm run smoke` loads the page in a browser and skips itself if Playwright is absent. |
 | `manifest.webmanifest` | Makes it installable. |
 | `sw.js` | Offline cache, cache-first. **Bump `CACHE` inside it whenever you change a file** or stale files are served. |
@@ -58,6 +59,39 @@ to the home screen, which browsers only allow over a secure page.
     python3 -m http.server 8000
 
 Then visit <http://localhost:8000>. `localhost` counts as secure.
+
+## Chords, and the change between them
+
+A chord chart tells you where the fingers go. It does not tell you the thing
+that actually gates progress: arriving at F from C on the beat. Which shape is
+easiest is not a property of the chord — it is a property of the pair.
+
+So `fretboard.js` holds no chord pictures. It takes the notes a chord is made
+of, searches the fretboard for every way four strings can sound them, keeps the
+ones a hand can hold, and puts fingers on them. It finds every shape the charts
+teach, which is how both the search and the charts are checked against each
+other.
+
+The fingering is chosen **per change**, not once per chord. A minor to F is easy
+because a finger stays on the second fret of the G string — but only if A minor
+was fingered with that finger in the first place, which is a decision about the
+pair and cannot be made while looking at A minor alone. An anchored finger costs
+nothing and pays a bonus; landing a finger costs more than lifting one.
+
+A progression is then solved as a shortest path over (shape, fingering), because
+a shape that is easy to arrive at can be expensive to leave and a song comes
+round again.
+
+```js
+const uke = MF.instrument('ukulele');
+uke.shapesFor('G7');                       // every way to play it, the chart first
+uke.easiestPath(['C', 'Am', 'F', 'G7']);   // the cheapest way through all of it
+```
+
+The chart shape is marked and offered first, but it does not always win on
+effort, and that is not tuned away. Everyone learns E as `4 4 4 2`; `1 4 0 2` is
+genuinely easier and sounds the same. Teaching a beginner and planning a change
+are different questions, so the caller picks.
 
 ## Notation
 
