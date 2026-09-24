@@ -54,6 +54,7 @@ input[type=range]{accent-color:var(--color-accent);background:transparent}
   <nav id="tabbar"></nav>
 </div>
 
+<script src="instruments.js"></script>
 <script>
 "use strict";
 /* ════════════════════════════════════════════════════════════════════════
@@ -62,23 +63,25 @@ input[type=range]{accent-color:var(--color-accent);background:transparent}
    Static, offline, no server. State persists to localStorage.
    ════════════════════════════════════════════════════════════════════════ */
 
-/* ── music theory / notation ───────────────────────────────────────────── */
-const DEG = {1:0,2:2,3:4,4:5,5:7,6:9,7:11};
-const RING  = ['6.','.2','7','1','5','3','7.','4','6','2','.1','.3'];        // clockwise from twelve
-const ORDER = ['5.','6.','7.','1','2','3','4','5','6','7','.1','.2','.3'];    // low→high, for pitch nudge
-const PENT  = ['5.','6.','1','2','3','5','6','.1','.2','.3'];
-const NAMES = {'5.':'G3','6.':'A3','7.':'B3','1':'C4','2':'D4','3':'E4','4':'F4','5':'G4','6':'A4','7':'B4','.1':'C5','.2':'D5','.3':'E5'};
+/* ── music theory / notation ─────────────────────────────────────────────
+   The drum is one instrument among others now; its theory and the notation
+   grammar both live in instruments.js so the ukulele can share them. What
+   stays here is the drum's own views — the pad wheel, the octave dots, the
+   editor's pitch nudge — which are about this instrument and nothing else. */
+const DRUM  = MF.instrument('drum');
+const DEG   = MF.DEGREE;
+const RING  = DRUM.ring;                 // clockwise from twelve
+const ORDER = DRUM.tokens;               // low→high, for pitch nudge
+const PENT  = DRUM.pentatonic;
+const NAMES = MF.DRUM_NAMES;
 const A = '#9184d9';
 
-function parts(p){ return {num:String(p).replace(/\./g,''), up:p[0]==='.', dn:p[p.length-1]==='.'}; }
-function hz(p){ const q=parts(p); return 261.6256*Math.pow(2,(DEG[+q.num]+(q.up?12:0)+(q.dn?-12:0))/12); }
+const parts = MF.padParts;
+function hz(p){ const f = DRUM.pitches(p); return f.length ? f[0] : 261.6256; }
 function lenLabel(d){ return d===1?'':d===0.5?'½':d===1.5?'·':d===2?'– –':d===3?'– – –':d===4?'– – – –':String(d); }
+/* The drum's views call a struck token a pad. One grammar, one local name. */
 function parse(str){
-  return str.trim().split(/\s+/).map(tok=>{
-    if(tok==='|') return {bar:true};
-    const b=tok.split('*'), dur=b[1]?parseFloat(b[1]):1;
-    return b[0]==='0' ? {rest:true,dur} : {pad:b[0],dur};
-  });
+  return MF.parseNotation(str).map(e => (e.bar || e.rest) ? e : {pad:e.tok, dur:e.dur, art:e.art});
 }
 const L=(label,s)=>({label,notes:parse(s)});
 

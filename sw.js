@@ -1,9 +1,10 @@
 /* MelodyFlow service worker — cache-first, offline-capable.
    Bump CACHE on every file change or stale files are served. */
-const CACHE = 'melodyflow-v2';
+const CACHE = 'melodyflow-v3';
 const ASSETS = [
   './',
   './index.html',
+  './instruments.js',
   './manifest.webmanifest',
   './icon.svg',
   './icon-maskable.svg',

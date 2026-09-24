@@ -1,0 +1,10 @@
+{
+  "name": "melodyflow",
+  "private": true,
+  "description": "A songbook and practice tool for a tongue drum and a ukulele — offline-capable PWA, no build step.",
+  "scripts": {
+    "test": "node --test test/*.test.mjs",
+    "smoke": "node test/smoke.mjs",
+    "serve": "python3 -m http.server 8000"
+  }
+}
