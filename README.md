@@ -23,7 +23,7 @@ arrangement editable.
 |---|---|
 | **Play** | The songbook (library) → a practice screen: next note huge, the whole line as a scrolling ribbon with a moving beat marker, and the pad lit on the drum. Three modes — **Notes only** (steady even pulse), **With rhythm** (real durations), and **On your own** (guided practice: nothing auto-plays — the next note lights up and you advance by tapping the correct pad yourself; *Listen* still plays it for you). Tempo, previous/next line. Songs with chords (tagged **uke**, and a *Ukulele* filter) switch to the ukulele play-along — see below. |
 | **Drum** | The virtual drum — Free play, Improvise (drone + pentatonic lifted forward), and Layout. Rotate the wheel; tap any pad to hear it. |
-| **Capture** | Record a phrase (simulated transcription in this build) → a draft that lands in the editor and can be saved to the book. |
+| **Capture** | Play, hum or whistle a phrase into the phone's microphone → the notes, their lengths and the tempo, as a draft that lands in the editor and can be saved to the book. |
 | **Book** | Every arrangement written out with its chords, **Your songs** (what you have written or corrected, and a saved copy of the whole book), and the decision register (in / adapted / corrected / out / queued, each with its reason). |
 
 The **note editor** is reachable from any song (Play → Edit, Book → edit, or a
@@ -32,6 +32,28 @@ rest, duplicate or delete, and tap-tempo the four transcriptions whose timing is
 still wrong. **Save** keeps it: a corrected built-in song replaces the original in
 the book (and can be restored), and a saved capture becomes a song of your own.
 Tap the title to rename it.
+
+## Listening
+
+The app can hear you through the phone's microphone. Tap **🎤 Listen** where it
+appears:
+
+- **Drum → On your own**: play the lit pad on your real drum and the line moves on,
+  exactly as tapping it on the screen does. The same note in another octave
+  counts — the drum's overtones can fool the ear by an octave.
+- **Ukulele → On your own**: strum the lit chord and it moves to the next change.
+  Only the song's own chords are candidates, which is what makes it dependable.
+- **Ukulele → Drill**: the clock stops when it hears the chord, not when you tap.
+- **Capture**: records notes, not sound — each strike's pitch snapped to the
+  nearest pad, the tempo from the gaps between notes, and every length in half
+  beats. Humming below the drum is moved up an octave onto it; notes that land
+  between two pads come back dashed in the editor.
+
+The microphone is only on while one of those is, it stops when the app goes to
+the background, and nothing is recorded or sent anywhere: samples are looked at
+and dropped. The detection is `listen.js` — YIN for a note, a twelve-note
+chroma for a chord, a jump in loudness for when either starts — and the smoke
+test drives all of it end to end through Chromium's fake microphone.
 
 ## Playing along on the ukulele
 
@@ -49,8 +71,9 @@ practice screen from *Tongue drum* to *Ukulele*:
   **Listen** strums it for you. **On your own** waits: make the shape, strum it,
   tap it, and it moves to the next change.
 
-Chords are in: Happy Birthday, Twinkle Twinkle, Frère Jacques (one chord — the
-place to start), Ode to Joy and Jingle Bells. The timing is worked out in
+Chords are in: Happy Birthday, You Are My Sunshine, Silent Night, Twinkle
+Twinkle, Frère Jacques (one chord — the place to start), Ode to Joy and Jingle
+Bells. The timing is worked out in
 `playalong.js`; a chord line that does not add up to its melody line is reported
 on the screen and fails the smoke test.
 
@@ -58,11 +81,12 @@ on the screen and fails the smoke test.
 
 | File | What it is |
 |---|---|
-| `index.html` | The app — engine, 14 arrangements, songbook, register, capture, editor. Vanilla JS, no build step. |
+| `index.html` | The app — engine, 16 arrangements, songbook, register, capture, editor. Vanilla JS, no build step. |
 | `instruments.js` | The instrument model: which tokens exist, what pitches each one sounds, how it is voiced — plus the notation grammar they share. Loaded before the app, imported by the tests. |
 | `fretboard.js` | Where the fingers go, and what it costs to get there from the shape you are already holding. Searches the fretboard from the notes of the chord; holds no chord pictures. |
 | `fretboard-view.js` | Draws a chord box, and the thing chord boxes never show: the finger that is already where it needs to be. Strings in, markup out — no state, no events. |
 | `playalong.js` | When every chord, strum and melody note falls, pickups included, for the play-along. No DOM, no audio, no clock — times are in beats. |
+| `listen.js` | The microphone, as numbers: which pad a note is, which chord a strum is, when either starts, and a run of notes as lengths in beats. No DOM, no audio graph — the tests feed it tones they make up. |
 | `songbook.js` | Your songs: saved as text in the book's own notation, merged over the built-ins, and written to / read from a songbook file. No DOM. |
 | `practice.js` | The drill scheduler: which change to put up next, and what your times say about it. No DOM, no audio, no clock — latencies go in as numbers. |
 | `test/` | `npm test` runs the unit tests on node's own runner, no dependencies. `npm run smoke` loads the page in a browser and skips itself if Playwright is absent. |
@@ -184,9 +208,7 @@ song and nothing else is removed.
 
 - Audio is a synthesised approximation of the drum (a few sine partials), not the
   real instrument.
-- Capture is a working UI with a **simulated** transcription — the microphone /
-  pitch-detection engine is the next piece; the recording flow, draft, editor
-  hand-off and saving to the book are real.
-- The four notebook transcriptions (Terminator, Low Rider, Can't Help Falling in
-  Love, Somewhere in My Memory) are flagged `timing` and carry placeholder even-beat
-  notation pending real corrections.
+- Silent Night, You Are My Sunshine, Hedwig's Theme, Terminator and Low Rider are
+  from the notebook. The register says what changed and why.
+- Terminator, Low Rider, Can't Help Falling in Love and Somewhere in My Memory are
+  flagged `timing`: the notes are right, the rhythm is a placeholder.

@@ -9,6 +9,7 @@
  * around, this says so and stops rather than failing as though something broke.
  */
 import http from 'node:http';
+import os from 'node:os';
 import fs from 'node:fs';
 import path from 'node:path';
 import { createRequire } from 'node:module';
@@ -241,7 +242,13 @@ await page.waitForTimeout(150);
 const restored = await page.evaluate(() => SONGS.find((x) => x.id === 'birthday').lines[0].notes[0].pad);
 
 // A capture saved becomes a song of your own.
-await page.evaluate(() => { App.setState({ tab: 'capture', screen: 'capture' }); App.dispatch('editCapture', {}, {}); });
+// (What the mic hears is tested below, with a fake microphone; here the
+// notes are handed in, as a finished capture would leave them.)
+await page.evaluate(() => {
+  App._cap = parse('1 1 5 5 | 6 6 5*2');
+  App.setState({ tab: 'capture', screen: 'capture', hasCap: true, capInfo: { count: 7, bpm: 90, uncertain: 0, snapped: 0 } });
+  App.dispatch('editCapture', {}, {});
+});
 await page.waitForTimeout(150);
 await page.click('[data-act="saveEdit"]');
 await page.waitForTimeout(200);
@@ -265,6 +272,103 @@ const imported = await page.evaluate(() => ({
 }));
 
 await browser.close();
+
+// ── Listening, through a fake microphone ─────────────────────────────────
+// Chromium can play a WAV file into getUserMedia in place of a microphone.
+// These are made up here: struck notes with a few overtones and a decay, and
+// strums of four strings fanned 22ms apart, with a little room noise.
+const SR = 48000;
+function wav(name, events, seconds) {
+  const n = Math.round(SR * seconds);
+  const x = new Float32Array(n);
+  let seed = 7;
+  for (let i = 0; i < n; i++) x[i] = 0.004 * (((seed = (seed * 1664525 + 1013904223) >>> 0) / 2 ** 32) * 2 - 1);
+  for (const { at, freqs, spread = 0 } of events) {
+    freqs.forEach((f, k) => {
+      const start = Math.round((at + (spread * k) / 1000) * SR);
+      for (let i = 0; start + i < n && i < SR * 1.2; i++) {
+        const t = i / SR;
+        const v = Math.sin(2 * Math.PI * f * t) + 0.35 * Math.sin(4 * Math.PI * f * t) + 0.12 * Math.sin(6 * Math.PI * f * t);
+        x[start + i] += (0.5 / freqs.length) * v * Math.exp(-t * 4) * Math.min(1, i / 48);
+      }
+    });
+  }
+  const buf = Buffer.alloc(44 + n * 2);
+  buf.write('RIFF', 0); buf.writeUInt32LE(36 + n * 2, 4); buf.write('WAVEfmt ', 8);
+  buf.writeUInt32LE(16, 16); buf.writeUInt16LE(1, 20); buf.writeUInt16LE(1, 22);
+  buf.writeUInt32LE(SR, 24); buf.writeUInt32LE(SR * 2, 28); buf.writeUInt16LE(2, 32); buf.writeUInt16LE(16, 34);
+  buf.write('data', 36); buf.writeUInt32LE(n * 2, 40);
+  for (let i = 0; i < n; i++) buf.writeInt16LE(Math.max(-32767, Math.min(32767, Math.round(x[i] * 32767))), 44 + i * 2);
+  const file = path.join(os.tmpdir(), `melodyflow-${name}.wav`);
+  fs.writeFileSync(file, buf);
+  return file;
+}
+const pad = (p) => {
+  const d = { 1: 0, 2: 2, 3: 4, 4: 5, 5: 7, 6: 9, 7: 11 }[p.replace(/\./g, '')];
+  return 261.6256 * 2 ** ((d + (p[0] === '.' ? 12 : 0) + (p.endsWith('.') ? -12 : 0)) / 12);
+};
+const midi = (m) => 440 * 2 ** ((m - 69) / 12);
+const strum = (frets) => [67, 60, 64, 69].map((open, i) => midi(open + frets[i]));
+
+// Twinkle's first line, half a second a note, after a moment of quiet.
+const twinkle = ['1', '1', '5', '5', '6', '6', '5'];
+const drumWav = wav('drum', twinkle.map((p, i) => ({ at: 0.6 + i * 0.5, freqs: [pad(p)] })), 5.5);
+// Happy Birthday's first line on the ukulele: C, then G7.
+const ukeWav = wav('uke', [
+  { at: 0.6, freqs: strum([0, 0, 0, 3]), spread: 22 },
+  { at: 1.8, freqs: strum([0, 2, 1, 2]), spread: 22 },
+], 4);
+
+async function withMic(file, fn) {
+  const b = await chromium.launch({ args: ['--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream', `--use-file-for-fake-audio-capture=${file}`, '--autoplay-policy=no-user-gesture-required'] });
+  const p = await b.newPage();
+  await p.route('https://fonts.googleapis.com/**', (r) => r.fulfill({ status: 200, contentType: 'text/css', body: '' }));
+  p.on('pageerror', (e) => errors.push('mic page: ' + String(e)));
+  await p.goto(url, { waitUntil: 'load' });
+  await p.waitForTimeout(300);
+  try { return await fn(p); } finally { await b.close(); }
+}
+const until = async (p, pred, ms) => {
+  for (let t = 0; t < ms; t += 100) {
+    if (await p.evaluate(pred)) return true;
+    await p.waitForTimeout(100);
+  }
+  return false;
+};
+
+// The drum, on your own: arm the line, turn the mic on, and play.
+const heardDrum = await withMic(drumWav, async (p) => {
+  await p.click('[data-act="openSong"][data-id="twinkle"]');
+  await p.click('[data-act="mode"][data-v="solo"]');
+  await p.click('[data-act="playLine"]');
+  const before = await p.evaluate(() => App.state.armItems.length);
+  await p.click('[data-act="micToggle"]');
+  const listening = await until(p, () => App.state.mic === 'on', 3000);
+  const finished = await until(p, () => !App.state.armed, 8000);
+  return { before, listening, finished, reached: await p.evaluate(() => App.state.armIdx), heard: await p.evaluate(() => App.state.heard) };
+});
+
+// The ukulele, on your own: C then G7 heard, and the line is done.
+const heardUke = await withMic(ukeWav, async (p) => {
+  await p.click('[data-act="openSong"][data-id="birthday"]');
+  await p.click('[data-act="playInst"][data-v="ukulele"]');
+  await p.click('[data-act="ukeSong"][data-v="solo"]');
+  await p.click('[data-act="ukeLine"]');
+  await p.click('[data-act="micToggle"]');
+  const finished = await until(p, () => App.state.ukeDone, 7000);
+  return { finished, heard: await p.evaluate(() => App.state.heard) };
+});
+
+// Capture: record the drum playing, stop, and read the notes back.
+const captured2 = await withMic(drumWav, async (p) => {
+  await p.click('[data-act="tab"][data-v="capture"]');
+  await p.click('[data-act="toggleRec"]');
+  await until(p, () => (App.state.capCount || 0) >= 7, 8000);
+  await p.click('[data-act="toggleRec"]');
+  await p.waitForTimeout(200);
+  return p.evaluate(() => ({ info: App.state.capInfo, notes: App.capNotes().map((n) => n.pad), shown: document.getElementById('scroll').textContent.includes('Heard ') }));
+});
+
 server.close();
 
 const checks = [
@@ -315,6 +419,12 @@ const checks = [
   ['your songs are listed in the book', listed === 1],
   ['a copy of the book is a songbook file', exported.kind === 'melodyflow-songbook' && exported.songs.length === 1 && !!exported.drill],
   ['a copy loads back in', imported.msg && imported.have && imported.mine === 2],
+  ['the mic turns on when asked', heardDrum.listening],
+  ['playing the drum moves the line on by ear', heardDrum.before === 7 && heardDrum.finished],
+  ['strumming C then G7 finishes the line by ear', heardUke.finished],
+  ['capture hears every note of the phrase', captured2.info && captured2.info.count >= 7],
+  ['capture writes the tune down as played', captured2.notes.slice(0, 7).join(' ') === twinkle.join(' ')],
+  ['capture works out the tempo', captured2.info && Math.abs(captured2.info.bpm - 120) <= 6],
   ['no page errors', errors.length === 0],
 ];
 
@@ -324,5 +434,6 @@ for (const [what, ok] of checks) {
   if (!ok) failed++;
 }
 if (errors.length) console.log(errors.join('\n'));
+if (failed) console.log(JSON.stringify({ heardDrum, heardUke, captured2 }, null, 1));
 if (failed) console.log(JSON.stringify({ afterOne, afterTwo, book, uke, midLine, endLine, armed, afterTap, soloDone, saved, afterReload, restored, captured, listed, imported }, null, 1));
 process.exit(failed ? 1 : 0);

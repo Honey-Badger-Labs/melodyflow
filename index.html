@@ -61,6 +61,7 @@ input[type=range]{accent-color:var(--color-accent);background:transparent}
 <script src="practice.js"></script>
 <script src="playalong.js"></script>
 <script src="songbook.js"></script>
+<script src="listen.js"></script>
 <script>
 "use strict";
 /* ════════════════════════════════════════════════════════════════════════
@@ -127,12 +128,34 @@ const BUILTIN=[
     L('Are you going','2 2 2*2'),L('to Scarborough Fair','6 6 5 | 2*3'),L('Parsley, sage','4 3 2 | 1*3')]},
   {id:'amazing',title:'Amazing Grace',cat:'Hymn',level:2,bpm:72,meter:'3/4',stars:2,flag:'adapted',lines:[
     L('Amazing grace','5. 1*2 3*.5 1*.5 | 3*3'),L('how sweet the sound','2*3 | 1*2 5.'),L('that saved a wretch like me','5. 1*2 3*.5 1*.5 | 3*3')]},
-  {id:'hedwig',title:"Hedwig's Theme",cat:'Film',level:3,bpm:88,meter:'3/4',stars:1,flag:'adapted',lines:[
-    L('Opening','6. 2 4*1.5 3*.5 | 2*3'),L('Answering phrase','.2*3 | 6*3'),L('Falling','5*1.5 4*.5 3*.5 4*.5 | 2*3')]},
+  // From the notebook, in A minor: E A C B A E' D' B. The answer lands on G
+  // where the film has G sharp, which this drum does not have.
+  {id:'hedwig',title:"Hedwig's Theme",cat:'Film · notebook',level:3,bpm:88,meter:'3/4',pickup:1,stars:1,flag:'adapted',lines:[
+    L('Opening','3 | 6*1.5 .1*.5 7 | 6*2 .3 | .2*3 | 7*2'),L('Answer','3 | 6*1.5 .1*.5 7 | 6*2 5 | 3*3')]},
+  // The melody as the notebook has it; the rhythm is still a guess.
   {id:'terminator',title:'Terminator theme',cat:'Film · notebook',level:3,bpm:76,meter:'4/4',stars:0,flag:'timing',lines:[
-    L('The figure','1 1 5. 1 | 1 1 5. 1'),L('Answer','1 1 5. 1 | 7. 1*2')]},
+    L('The figure','6 7 .1*2 | 7 5 1*2'),L('Up high','6 7 .1*2 | 7 5 .3 .2'),L('Home','6 7 .1*2 | 7 5 1*2')]},
   {id:'lowrider',title:'Low Rider',cat:'Funk · notebook',level:3,bpm:92,meter:'4/4',stars:0,flag:'timing',lines:[
-    L('The hook','5 5 5 6 | 5*2 3*2'),L('Again','5 5 5 6 | 5*2 1*2')]},
+    L('The hook','7 7 7 7 7 .1 .2 | 5 7 .1 7 5'),L('Again','7 7 7 7 7 .1 .2 | 5 7 .1 7 5'),L('Down on 4','4 4 4 4 4 | 4 4 4 4 4 | 4 5')]},
+  // Public domain. The one F above the top pad, on "heav-en-ly", is played as
+  // E: this drum stops at E5 — the notebook boxes that note for the same reason.
+  {id:'silent',title:'Silent Night (Stille Nag)',cat:'Christmas · notebook',level:2,bpm:66,meter:'3/4',stars:0,flag:'adapted',lines:[
+    L('Silent night, holy night','5*1.5 6*.5 5 | 3*3 | 5*1.5 6*.5 5 | 3*3','C*12'),
+    L('All is calm, all is bright','.2*2 .2 | 7*3 | .1*2 .1 | 5*3','G7*6 | C*6'),
+    L('Round yon virgin mother and child','6*2 6 | .1*1.5 7*.5 6 | 5*1.5 6*.5 5 | 3*3','F*6 | C*6'),
+    L('Holy infant so tender and mild','6*2 6 | .1*1.5 7*.5 6 | 5*1.5 6*.5 5 | 3*3','F*6 | C*6'),
+    L('Sleep in heavenly peace','.2*2 .2 | .3*1.5 .2*.5 7 | .1*3 | .3*3','G7*6 | C*6'),
+    L('Sleep in heavenly peace','.1*1.5 5*.5 3 | 5*1.5 4*.5 2 | 1*6','C*3 | G7*3 | C*6')]},
+  // Still under copyright, so the lines are named rather than sung. Starts on
+  // low 5 — the notebook's opening 1 is a fourth too high.
+  {id:'sunshine',title:'You Are My Sunshine',cat:'Country · notebook',level:1,bpm:100,meter:'4/4',pickup:3,stars:0,lines:[
+    L('Opening','5. 1 2 | 3*3 3*2','0*3 | C*5'),
+    L('Answer','3 2 3 | 1*3 1*2','C*8'),
+    L('Up to 6','1 2 3 | 4*3 6*2','C*3 | F*5'),
+    L('Coming down','6 5 4 | 3*5','F*3 | C*5'),
+    L('Up to 6 again','1 2 3 | 4*3 6*2','C*3 | F*5'),
+    L('Down home','6 5 4 | 3*3 1*2','F*3 | C*5'),
+    L('Last line','1 2 3 | 4*2 2 2 | 3*2 1*4','C*3 | G7*4 | C*6')]},
   {id:'cant',title:"Can't Help Falling in Love",cat:'Ballad · notebook',level:3,bpm:68,meter:'4/4',stars:1,flag:'timing',lines:[
     L('Wise men say','1 3 5 .1*2'),L('only fools rush in','7 5 6 5*2')]},
   {id:'homealone',title:'Somewhere in My Memory',cat:'Film · notebook',level:3,bpm:80,meter:'3/4',stars:0,flag:'timing',lines:[
@@ -156,8 +179,11 @@ const PROGS=[
 const REGISTER=[
   {t:'Scarborough Fair',v:'in',r:'Dorian, so home is 2 rather than 1. Sits inside C4–D5 with nothing changed.'},
   {t:'Old MacDonald Had a Farm',v:'corrected',r:'Corrected, not adapted — "had a farm" drops below the tonic to 5. 6. 6. 5. An earlier version had it an octave too high.'},
-  {t:"Hedwig's Theme",v:'adapted',r:'Overturned on request. In A minor the opening eight notes are exact on white notes; only the answering phrase substitutes.'},
-  {t:'Low Rider',v:'adapted',r:'Overturned. Ruled out for needing blues notes, but your notebook has a diatonic version that plays as written.'},
+  {t:"Hedwig's Theme",v:'adapted',r:'Now from your notebook, in A minor. The opening eight notes are exact on white notes; the answer lands on G where the film has G♯.'},
+  {t:'Silent Night (Stille Nag)',v:'adapted',r:'From your notebook, with the rhythm and chords added. One note changes: the F on "heav-en-ly" is above the top pad, so it is played as E. The notebook boxes it for the same reason.'},
+  {t:'You Are My Sunshine',v:'corrected',r:'From your notebook, one note corrected: it opens on low 5, not 1 — the tune leaps up a fourth into the second note. Everything after that is as you wrote it.'},
+  {t:'Terminator theme',v:'corrected',r:'Was the drum pattern under the theme; now the melody from your notebook. The rhythm is still a guess — tap it in to fix it.'},
+  {t:'Low Rider',v:'adapted',r:'Overturned. Ruled out for needing blues notes, but your notebook has a diatonic version that plays as written — and now it does. The rhythm is still a guess.'},
   {t:'Greensleeves',v:'out',r:'Wants G♯ at every cadence and alternates F with F♯. Four or five notes would have to change — past adaptation, into a different tune.'},
   {t:'Stairway to Heaven',v:'out',r:'The intro is a chromatic descent A–G♯–G–F♯–F–E. Two of those notes do not exist here, and the descent is the piece.'},
   {t:'Canon in D',v:'queued',r:'Transposes to C cleanly. The open question is range, not key.'},
@@ -185,6 +211,7 @@ const App = {
     edNotes:[], edTitle:'', edSub:'', edCtx:null, sel:0, rot:0,
     ukeSong:'along', strum:'downs', uCi:-1, uT:0, count:0, ukeDone:false,
     toast:'', bookMsg:'',
+    micOn:false, mic:'off', heard:null, capInfo:null,
     tapMsg:'Terminator is really in 13/8. Tap four bars and I will re-bar it.'
   },
 
@@ -248,7 +275,7 @@ const App = {
     } else {
       const n=(this.saved||[]).filter(x=>x.custom).length+1;
       const title=(st.edTitle&&st.edTitle!=='Untitled capture')?st.edTitle:'My song '+n;
-      const ser={id:'my-'+Date.now().toString(36),title,cat:'My songs',level:1,bpm:84,meter:'4/4',custom:true,
+      const ser={id:'my-'+Date.now().toString(36),title,cat:'My songs',level:1,bpm:Math.max(40,Math.min(200,ctx.bpm||84)),meter:'4/4',custom:true,
                  lines:[{label:'Line 1',notes:B.write(notes)}]};
       this.saved=B.upsert(this.saved,ser); this.saveSongs();
       this.setState({tab:'play',screen:'practice',songId:ser.id,line:0,cur:-1});
@@ -292,6 +319,9 @@ const App = {
   ac(){ if(!this._ac) this._ac=new (window.AudioContext||window.webkitAudioContext)();
         if(this._ac.state==='suspended') this._ac.resume(); return this._ac; },
   tone(f,dur,gain,partials){
+    // The microphone hears the app too. Anything struck while the app is
+    // sounding is taken to be the app, not you.
+    this._outUntil=Math.max(this._outUntil||0,performance.now()+Math.min(dur,1.4)*1000);
     try{
       const ac=this.ac(), t=ac.currentTime, g=ac.createGain();
       g.connect(ac.destination);
@@ -345,23 +375,30 @@ const App = {
     this._shownAt=performance.now();
     this.setState({drillKey:k,drillLive:true});
   },
-  drillTap(){
+  drillTap(silent){
     const st=this.state;
     if(!st.drillLive||!st.drillKey) return this.drillNext();
     const ms=Math.round(performance.now()-this._shownAt);
     const d=this.deck(), target=MF_PRACTICE.targetMs(d.bpm,d.beats);
     this.decks[st.progId]=MF_PRACTICE.record(d,st.drillKey,ms);
     const pair=this.drillPair(st.drillKey);
-    if(pair) this.playToken('ukulele',pair[1].chord,'d');
+    if(pair&&!silent) this.playToken('ukulele',pair[1].chord,'d');
     this.setState({drillLive:false,drillLast:{key:st.drillKey,ms,verdict:MF_PRACTICE.grade(ms,target)}});
   },
   strike(p){
     this.tone(hz(p),1.6);
+    if(this.soloHit(p)) return;
+    this.setState({lit:p});
+    clearTimeout(this._litT); this._litT=setTimeout(()=>this.setState({lit:null}),240);
+  },
+  /* On your own: only the right next pad moves the line on. From the mic the
+     same note an octave away counts too — the drum's overtones can fool the
+     ear by an octave, and a learner who found the note has found it. */
+  soloHit(p,octaveOk){
     const st=this.state;
-    // solo practice: only the correct next pad advances the line/song
     if(st.armed && st.screen==='practice' && st.armItems && st.armItems.length){
       const tgt=st.armItems[st.armIdx];
-      if(tgt && p===tgt.pad){
+      if(tgt && (p===tgt.pad || (octaveOk && MF_LISTEN.sameNote(p,tgt.pad)))){
         const next=st.armIdx+1;
         clearTimeout(this._litT);
         if(next<st.armItems.length){
@@ -371,11 +408,146 @@ const App = {
           this.setState({armed:false,armScope:null,armItems:[],armIdx:0,cur:-1,lit:p});
         }
         this._litT=setTimeout(()=>this.setState({lit:null}),240);
-        return;
+        return true;
       }
     }
-    this.setState({lit:p});
+    return false;
+  },
+
+  /* ---- the microphone ----
+     On only where it is useful — practising on your own, the drill, and
+     Capture — and only once asked for. Nothing is recorded or sent: samples
+     are looked at and dropped, and only the notes heard are kept. */
+  micWanted(){
+    const st=this.state;
+    if(st.screen==='capture') return st.rec==='listening';
+    if(!st.micOn) return false;
+    if(st.screen==='practice') return (st.inst==='ukulele'&&this.hasUke(this.song()))?st.ukeSong==='solo':st.mode==='solo';
+    if(st.screen==='drum') return st.inst==='ukulele'&&st.ukeMode==='drill';
+    return false;
+  },
+  micKind(){
+    const st=this.state;
+    if(st.screen==='capture') return 'capture';
+    if(st.screen==='drum') return 'drill';
+    return (st.inst==='ukulele'&&this.hasUke(this.song()))?'chord':'note';
+  },
+  syncMic(){
+    const want=this.micWanted(), st=this.state;
+    if(want&&!this._mic&&st.mic!=='starting'&&st.mic!=='denied'&&st.mic!=='none') this.micStart();
+    else if(!want&&this._mic) this.micStop();
+  },
+  async micStart(){
+    if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia||!window.isSecureContext){ this.setState({mic:'none'}); return; }
+    this.state.mic='starting'; this.render();
+    try{
+      const stream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:false,noiseSuppression:false,autoGainControl:false}});
+      if(!this.micWanted()){ stream.getTracks().forEach(t=>t.stop()); this.state.mic='off'; this.render(); return; }
+      const ac=this.ac(), src=ac.createMediaStreamSource(stream), an=ac.createAnalyser(), mute=ac.createGain();
+      an.fftSize=8192; an.smoothingTimeConstant=0; mute.gain.value=0;
+      // Some browsers only run a node that leads somewhere; this leads to silence.
+      src.connect(an); an.connect(mute); mute.connect(ac.destination);
+      this._mic={stream,src,an,mute,buf:new Float32Array(an.fftSize),det:MF_LISTEN.onsets(),pending:null,events:[]};
+      this._micT=setInterval(()=>this.micTick(),25);
+      this.state.heard=null; this.setState({mic:'on'});
+    }catch(e){
+      this.setState({mic:e&&(e.name==='NotAllowedError'||e.name==='SecurityError')?'denied':'none'});
+    }
+  },
+  micStop(){
+    const m=this._mic; if(!m) return;
+    clearInterval(this._micT); this._mic=null;
+    try{ m.src.disconnect(); m.an.disconnect(); m.mute.disconnect(); }catch(e){}
+    m.stream.getTracks().forEach(t=>t.stop());
+    if(this.state.mic==='on'||this.state.mic==='starting') this.state.mic='off';
+  },
+  /* Every 25ms: how loud, did something start, and once it has settled, what
+     was it. A note is read 45ms in, past the strike; a strum 190ms in, when
+     all four strings are sounding. */
+  micTick(){
+    const m=this._mic; if(!m) return;
+    const H=MF_LISTEN, sr=this.ac().sampleRate, now=performance.now(), buf=m.buf, n=buf.length;
+    m.an.getFloatTimeDomainData(buf);
+    const level=H.rms(buf,n-1024,n);
+    const el=document.getElementById('mf-level'); if(el) el.style.width=Math.min(100,Math.round(Math.sqrt(level)*260))+'%';
+    const started=m.det.push(level,now);
+    if(started&&!m.pending&&now>(this._outUntil||0)) m.pending={t:now,votes:[]};
+    const p=m.pending; if(!p) return;
+    const kind=this.micKind(), age=now-p.t;
+    if(kind==='chord'||kind==='drill'){
+      if(age>=190){ m.pending=null; this.heardChord(H.chroma(buf,sr)); }
+      return;
+    }
+    if(age>=45){
+      const got=H.yin(buf.subarray(n-2048),sr);
+      if(got&&got.clarity>0.75){
+        const pad=H.nearestPad(got.hz,{fold:kind==='capture',tolerance:kind==='capture'?60:50});
+        if(pad) p.votes.push(pad);
+      }
+    }
+    if(p.votes.length>=2||age>=170){
+      m.pending=null;
+      if(!p.votes.length) return;
+      const count={}; p.votes.forEach(v=>count[v.tok]=(count[v.tok]||0)+1);
+      const tok=Object.keys(count).sort((a,b)=>count[b]-count[a])[0];
+      this.heardNote(p.votes.find(v=>v.tok===tok),p.t,kind);
+    }
+  },
+  heardNote(h,t,kind){
+    const st=this.state;
+    if(kind==='capture'){
+      this._mic.events.push({t,tok:h.tok,cents:h.cents,snapped:h.snapped});
+      this.setState({heard:{tok:h.tok,ok:true},capCount:this._mic.events.length});
+      return;
+    }
+    const tgt=st.armed&&st.armItems[st.armIdx];
+    st.heard={tok:h.tok,ok:false,want:tgt?tgt.pad:null};
+    if(this.soloHit(h.tok,true)){ st.heard.ok=true; this.render(); return; }
+    if(!tgt) st.heard.ok=true;
+    this.setState({lit:h.tok});
     clearTimeout(this._litT); this._litT=setTimeout(()=>this.setState({lit:null}),240);
+  },
+  heardChord(ch){
+    const st=this.state, H=MF_LISTEN;
+    if(this.micKind()==='drill'){
+      const pair=st.drillKey&&this.drillPair(st.drillKey), got=H.pickChord(ch,this.prog().chords);
+      if(!got||got.score<0.55) return;
+      st.heard={tok:got.name,ok:!!pair&&got.name===pair[1].chord,want:pair?pair[1].chord:null};
+      if(st.drillLive&&st.heard.ok) this.drillTap(true); else this.render();
+      return;
+    }
+    const p=this.ukePlan(), got=H.pickChord(ch,p.groups.map(g=>g.chord));
+    if(!got||got.score<0.55) return;
+    if(!st.armed){ this.setState({heard:{tok:got.name,ok:true}}); return; }
+    const want=p.groups[st.armItems[st.armIdx]].chord;
+    st.heard={tok:got.name,ok:got.name===want,want};
+    if(st.heard.ok) this.ukeTap(true); else this.render();
+  },
+  /* The mic switch, what it has heard, and a level meter the loop moves
+     without redrawing the page. */
+  micRow(idle){
+    const st=this.state, on=!!this._mic&&st.mic==='on', h=st.heard;
+    const label=st.mic==='starting'?'Asking…':on?'Listening':'Listen';
+    const msg=st.mic==='denied'?'The microphone is blocked for this site. Allow it in your browser settings, then tap Listen again.'
+      :st.mic==='none'?'This browser cannot use the microphone here.'
+      :!on?idle
+      :h?(h.ok?'Heard '+h.tok+' ✓':'Heard '+h.tok+(h.want?' — looking for '+h.want:''))
+      :'Play — the app is listening.';
+    const col=on&&h?(h.ok?'#8fd0b4':'#e6ca9c'):'var(--color-neutral-600)';
+    return `<div style="margin-top:9px;display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:var(--radius-md);border:1px solid ${on?'var(--color-accent-700)':'var(--color-neutral-800)'};background:${on?'#241f3d':'transparent'}">
+      <button data-act="micToggle" style="flex:none;height:32px;padding:0 12px;border-radius:999px;border:1px solid var(--color-accent);background:${on?'var(--color-accent)':'transparent'};color:${on?'#171927':'var(--color-accent-200)'};font:600 12px Inter,sans-serif;cursor:pointer">🎤 ${label}</button>
+      <div style="flex:1;min-width:0">
+        <div style="height:4px;border-radius:2px;background:#292b31;overflow:hidden"><div id="mf-level" style="height:100%;width:0;background:#8fd0b4;transition:width .05s linear"></div></div>
+        <div style="font:400 11px/1.4 Inter,sans-serif;color:${col};margin-top:5px;text-wrap:pretty">${esc(msg)}</div>
+      </div></div>`;
+  },
+  /* Capture's notes, from what the mic heard: a pulse, lengths in beats, and
+     which notes to double-check. */
+  finishCapture(){
+    const ev=this._mic?this._mic.events.slice():[];
+    const q=MF_LISTEN.quantize(ev);
+    this._cap=q.notes.map(n=>Object.assign({pad:n.tok,dur:n.dur},(Math.abs(n.cents)>30||n.snapped)?{uncertain:true}:{}));
+    return {count:ev.length,bpm:q.bpm||84,uncertain:q.notes.filter(n=>Math.abs(n.cents)>30).length,snapped:q.notes.filter(n=>n.snapped).length};
   },
 
   /* ---- song helpers ---- */
@@ -479,11 +651,11 @@ const App = {
     this.setState({armed:true,armScope:scope,armItems:items,armIdx:0,uCi:g.first,uT:Math.max(a,g.t),
                    line:p.chords[g.first].li,playing:false,playScope:null,count:0,ukeDone:false});
   },
-  ukeTap(){
+  ukeTap(silent){
     const st=this.state, w=this.ukeWhere();
-    if(!st.armed){ if(w.ci>=0) this.playToken('ukulele',w.p.chords[w.ci].chord,'d'); return; }
+    if(!st.armed){ if(w.ci>=0&&!silent) this.playToken('ukulele',w.p.chords[w.ci].chord,'d'); return; }
     const p=w.p, cur=p.groups[st.armItems[st.armIdx]];
-    this.playToken('ukulele',cur.chord,'d');
+    if(!silent) this.playToken('ukulele',cur.chord,'d');
     const next=st.armIdx+1;
     if(next<st.armItems.length){
       const g=p.groups[st.armItems[next]];
@@ -519,7 +691,7 @@ const App = {
   },
 
   /* ---- capture + editor ---- */
-  capNotes(){ if(!this._cap) this._cap=parse('1 1 5 5 | 6 6 5*2 | 4 4 3*2'); return this._cap; },
+  capNotes(){ return this._cap||[]; },
   openEditor(title,notes,sub,ctx){
     const n=notes.map(x=>Object.assign({},x));
     this.setState({screen:'editor',edTitle:title,edSub:sub,edCtx:ctx||null,edNotes:n,sel:n.findIndex(x=>!x.bar)});
@@ -712,7 +884,8 @@ const App = {
 
       <div style="padding-bottom:8px">
         <div style="display:flex;gap:5px;padding:3px;border-radius:var(--radius-md);background:#292b31;border:1px solid var(--color-neutral-800)">${this.seg(modes,st.mode,'mode')}</div>
-        ${solo?`<div style="font:400 11px/1.5 Inter,sans-serif;color:var(--color-neutral-600);margin-top:8px;text-align:center;text-wrap:pretty">${st.armed?'Tap the lit pad on the drum to move to the next note.':'Tap “Practise line”, then play it yourself on the drum. “Listen” plays it for you.'}</div>`:''}
+        ${solo?`<div style="font:400 11px/1.5 Inter,sans-serif;color:var(--color-neutral-600);margin-top:8px;text-align:center;text-wrap:pretty">${st.armed?(this._mic?'Play the lit pad on your drum — the app hears it and moves on.':'Tap the lit pad on the drum to move to the next note.'):'Tap “Practise line”, then play it yourself on the drum. “Listen” plays it for you.'}</div>
+        ${this.micRow('Turn on the mic and play your real drum — the right note moves you on.')}`:''}
         <div style="display:flex;align-items:center;gap:11px;margin-top:11px">
           <span style="font:600 9.5px ui-monospace,Menlo,monospace;letter-spacing:.18em;text-transform:uppercase;color:var(--color-neutral-600)">Tempo</span>
           <input type="range" min="50" max="126" step="2" data-act="setTempo" value="${st.tempo}" style="flex:1">
@@ -785,7 +958,7 @@ const App = {
     const lineBusy=(st.playing&&st.playScope==='line')||(st.armed&&st.armScope==='line');
     const songBusy=(st.playing&&st.playScope==='song')||(st.armed&&st.armScope==='song');
     const hint=solo
-      ?(st.armed?'Make the lit shape, strum it, then tap it. Nothing moves until you do.':'Practise a line and the chords wait for you: tap each one once it rings.')
+      ?(st.armed?(this._mic?'Make the lit shape and strum it — the app hears the chord and moves on.':'Make the lit shape, strum it, then tap it. Nothing moves until you do.'):'Practise a line and the chords wait for you: strum each one, or tap it, once it rings.')
       :'One bar is counted in. The app plays the tune and the click; you strum where the arrow lights.';
     const problems=p.problems.length?`<div style="margin-top:10px;font:400 11.5px/1.5 Inter,sans-serif;color:#e0c79a">Line ${p.problems[0].li+1}'s chords last ${p.problems[0].chords} beats but its tune lasts ${p.problems[0].melody}, so they will drift.</div>`:'';
 
@@ -812,6 +985,7 @@ const App = {
       <div style="margin-top:12px;display:flex;gap:5px;padding:3px;border-radius:var(--radius-md);background:#292b31;border:1px solid var(--color-neutral-800)">${this.seg(modes,st.ukeSong,'ukeSong')}</div>
       <div style="margin-top:6px;display:flex;gap:5px;padding:3px;border-radius:var(--radius-md);background:#292b31;border:1px solid var(--color-neutral-800)">${this.seg(strums,st.strum,'strum',)}</div>
       <div style="font:400 11px/1.5 Inter,sans-serif;color:var(--color-neutral-600);margin-top:8px;text-align:center;text-wrap:pretty">${hint}</div>
+      ${solo?this.micRow('Turn on the mic and strum — the right chord moves you on.'):''}
       <div style="display:flex;align-items:center;gap:11px;margin-top:10px">
         <span style="font:600 9.5px ui-monospace,Menlo,monospace;letter-spacing:.18em;text-transform:uppercase;color:var(--color-neutral-600)">Tempo</span>
         <input type="range" min="40" max="126" step="2" data-act="setTempo" value="${st.tempo}" style="flex:1">
@@ -890,7 +1064,7 @@ const App = {
 
           <div style="margin-top:11px;text-align:center;min-height:38px">
             ${st.drillLive
-              ? `<div style="font:500 13px Inter,sans-serif;color:var(--color-accent-200)">Make the shape, then tap it.</div>
+              ? `<div style="font:500 13px Inter,sans-serif;color:var(--color-accent-200)">${this._mic?'Make the shape and strum it.':'Make the shape, then tap it.'}</div>
                  <div style="font:400 11px Inter,sans-serif;color:var(--color-neutral-600);margin-top:3px">The clock is running.</div>`
               : last
                 ? `<div style="font:500 15px Inter,sans-serif;color:${verdictCol}">${(last.ms/1000).toFixed(1)}s · ${verdictTxt}</div>
@@ -899,6 +1073,7 @@ const App = {
           </div>
 
           <button data-act="${st.drillLive?'drillTap':'drillGo'}" style="width:100%;height:42px;margin-top:4px;border-radius:var(--radius-md);border:1px solid var(--color-accent);background:${st.drillLive?'var(--color-accent)':'transparent'};color:${st.drillLive?'#171927':'var(--color-accent-200)'};font:600 13.5px Inter,sans-serif;cursor:pointer">${st.drillLive?'I have it':(last?'Next change':'Start')}</button>
+          ${this.micRow('Turn on the mic and the clock stops when it hears the chord — no tap.')}
         </div>
 
         <div style="margin-top:13px;padding:13px 14px;border-radius:var(--radius-lg);border:1px solid var(--color-neutral-900);background:var(--color-surface)">
@@ -986,41 +1161,49 @@ const App = {
   },
 
   screenCapture(){
-    const st=this.state;
-    const recLabel=st.rec==='listening'?'Listening':'Record';
-    const recHint=st.rec==='listening'?'play or hum the phrase':st.hasCap?'tap to record again':'four bars is plenty';
-    const recGlow=st.rec==='listening'?'0 0 0 10px rgba(145,132,217,.10), 0 0 48px rgba(145,132,217,.34)':'none';
-    const bars=Array.from({length:13},(_,i)=>`<div style="width:4px;height:40px;border-radius:2px;background:${st.rec==='listening'?'#9184d9':'#3f424d'};transform-origin:50% 100%;animation:${st.rec==='listening'?'mfLevel '+(520+(i%5)*130)+'ms ease-in-out '+(i*60)+'ms infinite':'none'}"></div>`).join('');
-    const recents=[{name:'Kitchen radio hook',notes:'3 3 4 5 | 5 4 3 2',when:'yesterday'},{name:'Something in 3',notes:'5 .1*2 | 7 .1 5',when:'Tue'}];
-    const capBlock=st.hasCap?`<div style="margin-top:20px;padding:14px;border-radius:var(--radius-lg);border:1px solid var(--color-neutral-800);background:var(--color-surface)">
+    const st=this.state, listening=st.rec==='listening', info=st.capInfo;
+    const recLabel=listening?(st.mic==='starting'?'Starting…':'Stop'):'Record';
+    const recHint=st.mic==='denied'?'the microphone is blocked for this site'
+      :st.mic==='none'?'this browser cannot use the microphone here'
+      :listening?(st.capCount?st.capCount+' note'+(st.capCount===1?'':'s')+' so far · last '+(st.heard?st.heard.tok:''):'play, hum or whistle the phrase')
+      :st.hasCap?'tap to record again':'four bars is plenty';
+    const recGlow=listening?'0 0 0 10px rgba(145,132,217,.10), 0 0 48px rgba(145,132,217,.34)':'none';
+    const notes=this.capNotes();
+    const written=MF_SONGBOOK.write(notes);
+    const capBlock=st.hasCap&&info?`<div style="margin-top:20px;padding:14px;border-radius:var(--radius-lg);border:1px solid var(--color-neutral-800);background:var(--color-surface)">
         <div style="display:flex;align-items:baseline;justify-content:space-between">
-          <div style="font:500 14px Inter,sans-serif">Heard 11 notes</div>
-          <div style="font:400 11px ui-monospace,Menlo,monospace;color:var(--color-neutral-600)">≈ 84 bpm · 4/4</div>
+          <div style="font:500 14px Inter,sans-serif">Heard ${info.count} note${info.count===1?'':'s'}</div>
+          <div style="font:400 11px ui-monospace,Menlo,monospace;color:var(--color-neutral-600)">≈ ${info.bpm} bpm</div>
         </div>
-        <div style="font:400 12.5px/1.6 Inter,sans-serif;color:var(--color-neutral-500);margin-top:7px;text-wrap:pretty">Two notes came back uncertain — they are dashed in the editor. One sat outside your drum and has been snapped to the nearest pad.</div>
-        <div style="font:400 19px/1.9 ui-monospace,Menlo,monospace;color:var(--color-accent-300);margin-top:9px;letter-spacing:.08em;word-break:break-word">1 1 5 5 | 6 6 5*2 | 4 4 3*2</div>
+        <div style="font:400 12.5px/1.6 Inter,sans-serif;color:var(--color-neutral-500);margin-top:7px;text-wrap:pretty">${
+          [info.uncertain?`${info.uncertain} came back between two pads — dashed in the editor.`:'',
+           info.snapped?`${info.snapped} ${info.snapped===1?'was':'were'} outside your drum and moved by an octave onto it.`:'',
+           (!info.uncertain&&!info.snapped)?'Every note landed on a pad. Check the lengths — they are worked out from the gaps between notes.':''].filter(Boolean).join(' ')}</div>
+        <div style="font:400 17px/1.9 ui-monospace,Menlo,monospace;color:var(--color-accent-300);margin-top:9px;letter-spacing:.06em;word-break:break-word">${esc(written)}</div>
         <div style="display:flex;gap:8px;margin-top:13px">
           <button data-act="playCapture" style="flex:1;height:40px;border-radius:var(--radius-md);border:1px solid var(--color-neutral-700);background:transparent;color:var(--color-neutral-300);font:500 13px Inter,sans-serif;cursor:pointer">Hear it back</button>
           <button data-act="editCapture" style="flex:1.2;height:40px;border-radius:var(--radius-md);border:1px solid var(--color-accent);background:#2b2741;color:var(--color-accent-200);font:500 13px Inter,sans-serif;cursor:pointer">Fix and save</button>
-        </div></div>`:'';
+        </div></div>`
+      :(!listening&&info&&!info.count)?`<div style="margin-top:20px;font:400 12.5px/1.6 Inter,sans-serif;color:#e6ca9c;text-align:center;text-wrap:pretty">Nothing was heard. Hold the phone closer, or play a little louder, and try again.</div>`:'';
+    const mine=SONGS.filter(x=>x.custom).slice(-4).reverse();
     return `<div style="padding:0 20px">
-      <div style="font:600 9.5px/1 ui-monospace,Menlo,monospace;letter-spacing:.22em;text-transform:uppercase;color:var(--color-neutral-600)">Hum it, play it, or hold up a speaker</div>
+      <div style="font:600 9.5px/1 ui-monospace,Menlo,monospace;letter-spacing:.22em;text-transform:uppercase;color:var(--color-neutral-600)">Play it, hum it, or whistle it</div>
       <div style="font:500 27px/1.1 var(--font-heading);letter-spacing:-.02em;margin-top:7px">Capture</div>
-      <p style="font:400 13px/1.65 Inter,sans-serif;color:var(--color-neutral-500);margin:11px 0 0;text-wrap:pretty">Anything you can hum becomes numbers you can play. What comes back is a draft — you correct it before it enters the book.</p>
+      <p style="font:400 13px/1.65 Inter,sans-serif;color:var(--color-neutral-500);margin:11px 0 0;text-wrap:pretty">Anything you can play or hum becomes numbers for your drum. It listens through the phone's microphone; nothing is recorded or sent anywhere — only the notes are kept. What comes back is a draft you correct before it goes in the book.</p>
       <div style="margin-top:22px;display:grid;place-items:center;gap:16px">
         <button data-act="toggleRec" style="width:132px;height:132px;border-radius:50%;border:1px solid var(--color-accent);background:radial-gradient(circle at 50% 38%,#2b2741,#232532);cursor:pointer;display:grid;place-items:center;color:var(--color-accent-200);box-shadow:${recGlow};transition:box-shadow .3s">
           <span style="font:500 15px Inter,sans-serif">${recLabel}</span>
         </button>
-        <div style="display:flex;align-items:flex-end;gap:4px;height:40px">${bars}</div>
-        <div style="font:400 12px ui-monospace,Menlo,monospace;letter-spacing:.1em;color:var(--color-neutral-600)">${recHint}</div>
+        <div style="width:180px;height:6px;border-radius:3px;background:#292b31;overflow:hidden"><div id="mf-level" style="height:100%;width:0;background:#8fd0b4;transition:width .05s linear"></div></div>
+        <div style="font:400 12px ui-monospace,Menlo,monospace;letter-spacing:.06em;color:${st.mic==='denied'||st.mic==='none'?'#e6ca9c':'var(--color-neutral-600)'};text-align:center">${esc(recHint)}</div>
       </div>
       ${capBlock}
-      <div style="margin-top:20px;font:600 9.5px ui-monospace,Menlo,monospace;letter-spacing:.18em;text-transform:uppercase;color:var(--color-neutral-600)">Recent captures</div>
+      ${mine.length?`<div style="margin-top:20px;font:600 9.5px ui-monospace,Menlo,monospace;letter-spacing:.18em;text-transform:uppercase;color:var(--color-neutral-600)">Your songs</div>
       <div style="display:flex;flex-direction:column;gap:7px;margin-top:10px">
-        ${recents.map(r=>`<div style="display:flex;align-items:center;gap:12px;padding:11px 13px;border-radius:var(--radius-md);border:1px solid var(--color-neutral-900);background:var(--color-surface)">
-          <div style="flex:1;min-width:0"><div style="font:500 13.5px Inter,sans-serif">${esc(r.name)}</div><div style="font:400 11.5px ui-monospace,Menlo,monospace;color:var(--color-neutral-600);margin-top:3px">${esc(r.notes)}</div></div>
-          <span style="font:400 11px Inter,sans-serif;color:var(--color-neutral-700)">${esc(r.when)}</span></div>`).join('')}
-      </div>
+        ${mine.map(r=>`<button data-act="openSong" data-id="${r.id}" style="display:flex;align-items:center;gap:12px;padding:11px 13px;border-radius:var(--radius-md);border:1px solid var(--color-neutral-900);background:var(--color-surface);color:inherit;text-align:left;cursor:pointer">
+          <div style="flex:1;min-width:0"><div style="font:500 13.5px Inter,sans-serif">${esc(r.title)}</div><div style="font:400 11.5px ui-monospace,Menlo,monospace;color:var(--color-neutral-600);margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(MF_SONGBOOK.write(r.lines[0].notes))}</div></div>
+          <span style="font:400 11px Inter,sans-serif;color:var(--color-neutral-700)">${r.lines.length} line${r.lines.length===1?'':'s'}</span></button>`).join('')}
+      </div>`:''}
       <div style="height:16px"></div>
     </div>`;
   },
@@ -1168,6 +1351,7 @@ const App = {
     document.getElementById('scroll').innerHTML=html;
     document.getElementById('tabbar').innerHTML=this.tabbar();
     this.renderToast();
+    this.syncMic();
   },
   renderToast(){
     const el=document.getElementById('toast'); if(!el) return;
@@ -1179,7 +1363,10 @@ const App = {
   dispatch(act,ds,ev){
     const st=this.state, s=this.song();
     switch(act){
-      case 'tab': this.stop(); this.setState({tab:ds.v,screen:ds.v==='play'?'library':ds.v}); break;
+      case 'tab': this.stop();
+        // Leaving Capture mid-recording keeps what was heard rather than losing it.
+        if(st.rec==='listening'){ const info=this.finishCapture(); Object.assign(st,{rec:'idle',hasCap:info.count>0,capInfo:info}); }
+        this.setState({tab:ds.v,screen:ds.v==='play'?'library':ds.v}); break;
       case 'goDrums': this.setState({tab:'drum',screen:'drum',drumMode:'layout'}); break;
       case 'resume': this.setState({screen:'practice'}); break;
       case 'filter': this.setState({filter:ds.v}); break;
@@ -1243,11 +1430,18 @@ const App = {
       case 'rotL': this.setState({rot:st.rot-30}); break;
       case 'rotR': this.setState({rot:st.rot+30}); break;
       case 'toggleDrone': { const on=!st.drone; this.setState({drone:on}); if(on) this.tone(hz('1')/2,7); } break;
-      case 'toggleRec': if(st.rec!=='listening'){ this.setState({rec:'listening',hasCap:false});
-          setTimeout(()=>this.setState({rec:'idle',hasCap:true}),3000); } break;
-      case 'playCapture': this.stop(); setTimeout(()=>this.run(this.capNotes().map((n,idx)=>({n,li:0,idx})).filter(x=>!x.n.bar),84,'line'),60); break;
-      case 'editCapture': { const n=this.capNotes().map(x=>Object.assign({},x)); if(n[6])n[6].uncertain=true; if(n[10])n[10].uncertain=true;
-          this.openEditor('Untitled capture',n,'11 notes · ≈84 bpm',{kind:'capture'}); } break;
+      case 'toggleRec':
+        if(st.rec!=='listening'){ this.stop(); this.ac(); if(st.mic==='denied'||st.mic==='none') st.mic='off'; this.setState({rec:'listening',hasCap:false,capInfo:null,capCount:0,heard:null}); }
+        else { const info=this.finishCapture(); this.setState({rec:'idle',hasCap:info.count>0,capInfo:info}); }
+        break;
+      case 'micToggle':
+        if(this._mic||st.mic==='starting'){ this.setState({micOn:false}); }
+        else { if(st.mic==='denied'||st.mic==='none') st.mic='off'; this.ac(); this.setState({micOn:true,heard:null}); }
+        break;
+      case 'playCapture': this.stop(); setTimeout(()=>this.run(this.capNotes().map((n,idx)=>({n,li:0,idx})).filter(x=>!x.n.bar),(st.capInfo&&st.capInfo.bpm)||84,'line'),60); break;
+      case 'editCapture': { const n=this.capNotes().map(x=>Object.assign({},x)); if(!n.length) break;
+          const info=st.capInfo||{count:n.length,bpm:84};
+          this.openEditor('Untitled capture',n,info.count+' notes · ≈'+info.bpm+' bpm',{kind:'capture',bpm:info.bpm}); } break;
       case 'selNote': { const i=+ds.i; this.setState({sel:i}); const nn=st.edNotes[i]; if(nn&&nn.pad) this.tone(hz(nn.pad),1.3); } break;
       case 'hearSel': { const sel=st.edNotes[st.sel]; if(sel&&sel.pad) this.tone(hz(sel.pad),1.5); } break;
       case 'pitchUp': this.patch((ns,i)=>{ const k=ORDER.indexOf(ns[i]&&ns[i].pad); if(k>=0&&k<12){ ns[i]={pad:ORDER[k+1],dur:ns[i].dur}; this.tone(hz(ORDER[k+1]),1.2); } }); break;
@@ -1285,6 +1479,8 @@ const App = {
                  pad:el.getAttribute('data-pad'), i:el.getAttribute('data-i') };
       this.dispatch(act,ds,ev);
     };
+    // A mic left open in the background is a mic someone did not ask for.
+    document.addEventListener('visibilitychange',()=>{ if(document.hidden){ this.micStop(); this.render(); } else this.render(); });
     root.addEventListener('click',e=>handle(e,false));
     root.addEventListener('change',e=>handle(e,true));
     this.render();
