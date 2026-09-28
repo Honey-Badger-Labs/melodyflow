@@ -66,6 +66,10 @@ const launch = async () => {
 
 const browser = await launch();
 const page = await browser.newPage();
+// The app works offline, so its test must too: the web font is the one thing
+// it fetches from elsewhere, and a missing font is not a broken page.
+await page.route('https://fonts.googleapis.com/**', (r) => r.fulfill({ status: 200, contentType: 'text/css', body: '' }));
+page.on('dialog', (d) => d.accept());
 const errors = [];
 page.on('pageerror', (e) => errors.push(String(e)));
 page.on('console', (m) => {
@@ -164,6 +168,102 @@ await page.click('[data-act="inst"][data-v="drum"]');
 await page.waitForTimeout(250);
 const backToDrum = await page.evaluate(() => document.querySelectorAll('[data-act="strike"]').length);
 
+// ── The play-along ────────────────────────────────────────────────────────
+const scrollText = () => page.evaluate(() => document.getElementById('scroll').textContent);
+await page.click('[data-act="tab"][data-v="play"]');
+await page.waitForTimeout(200);
+const book = await page.evaluate(() => ({
+  first: document.querySelector('[data-act="openSong"]').getAttribute('data-id'),
+  // Every chord line in the book adds up to its melody line.
+  drift: SONGS.filter((x) => App.hasUke(x)).flatMap((x) => MF_PLAYALONG.plan(x).problems.map((q) => x.id + ':' + q.li)),
+  withChords: SONGS.filter((x) => App.hasUke(x)).length,
+}));
+await page.click('[data-act="filter"][data-v="uke"]');
+await page.waitForTimeout(150);
+const ukeRows = await page.evaluate(() => document.querySelectorAll('[data-act="openSong"]').length);
+
+await page.click('[data-act="openSong"][data-id="birthday"]');
+await page.waitForTimeout(200);
+await page.click('[data-act="playInst"][data-v="ukulele"]');
+await page.waitForTimeout(300);
+const uke = await page.evaluate(() => ({
+  diagrams: document.querySelectorAll('#scroll svg[role="img"]').length,
+  chips: document.getElementById('scroll').textContent.includes('G7'),
+  slots: [...document.querySelectorAll('#scroll div')].filter((d) => /^[↓↑·]$/.test(d.textContent.trim()) && d.children.length === 0).length,
+  anchors: /fingers? stay|Whole hand moves/.test(document.getElementById('scroll').textContent),
+}));
+
+// Play along, quick: a bar is counted in, then the strums move the chord on.
+await page.evaluate(() => App.setState({ tempo: 126 }));
+await page.click('[data-act="ukeLine"]');
+await page.waitForTimeout(700);
+const countingIn = (await scrollText()).includes('Count in');
+await page.waitForTimeout(1900);
+const midLine = await page.evaluate(() => ({ playing: App.state.playing, ci: App.state.uCi, now: document.getElementById('scroll').textContent.includes('Now') }));
+await page.waitForTimeout(2600);
+const endLine = await page.evaluate(() => ({ playing: App.state.playing, chord: MF_PLAYALONG.plan(App.song()).chords[App.state.uCi]?.chord }));
+
+// On your own: each change waits for a tap.
+await page.click('[data-act="ukeSong"][data-v="solo"]');
+await page.waitForTimeout(150);
+await page.click('[data-act="ukeLine"]');
+await page.waitForTimeout(150);
+const armed = await page.evaluate(() => ({ armed: App.state.armed, n: App.state.armItems.length, chord: MF_PLAYALONG.plan(App.song()).chords[App.state.uCi].chord }));
+await page.click('[data-act="ukeTap"]');
+await page.waitForTimeout(150);
+const afterTap = await page.evaluate(() => MF_PLAYALONG.plan(App.song()).chords[App.state.uCi].chord);
+await page.click('[data-act="ukeTap"]');
+await page.waitForTimeout(150);
+const soloDone = await page.evaluate(() => ({ armed: App.state.armed, done: App.state.ukeDone }));
+
+// ── Saving ────────────────────────────────────────────────────────────────
+await page.click('[data-act="playInst"][data-v="drum"]');
+await page.waitForTimeout(150);
+await page.click('[data-act="editThis"]');
+await page.waitForTimeout(150);
+await page.click('[data-act="pitchUp"]');
+await page.click('[data-act="saveEdit"]');
+await page.waitForTimeout(200);
+const saved = await page.evaluate(() => ({
+  toast: document.getElementById('toast').textContent.includes('Saved'),
+  stored: JSON.parse(localStorage.getItem('melodyflow-songs') || '[]').map((x) => x.id),
+  firstNote: SONGS.find((x) => x.id === 'birthday').lines[0].notes[0].pad,
+}));
+await page.reload({ waitUntil: 'load' });
+await page.waitForTimeout(300);
+const afterReload = await page.evaluate(() => ({
+  firstNote: SONGS.find((x) => x.id === 'birthday').lines[0].notes[0].pad,
+  edited: SONGS.find((x) => x.id === 'birthday').edited === true,
+  chordsKept: App.hasUke(SONGS.find((x) => x.id === 'birthday')),
+}));
+await page.evaluate(() => App.dispatch('restoreSong', { id: 'birthday' }, {}));
+await page.waitForTimeout(150);
+const restored = await page.evaluate(() => SONGS.find((x) => x.id === 'birthday').lines[0].notes[0].pad);
+
+// A capture saved becomes a song of your own.
+await page.evaluate(() => { App.setState({ tab: 'capture', screen: 'capture' }); App.dispatch('editCapture', {}, {}); });
+await page.waitForTimeout(150);
+await page.click('[data-act="saveEdit"]');
+await page.waitForTimeout(200);
+const captured = await page.evaluate(() => ({ screen: App.state.screen, song: App.song().title, custom: !!App.song().custom }));
+
+// ── A copy of the book, out and back in ───────────────────────────────────
+await page.click('[data-act="tab"][data-v="book"]');
+await page.waitForTimeout(150);
+await page.click('[data-act="book"][data-v="mine"]');
+await page.waitForTimeout(150);
+const listed = await page.evaluate(() => document.querySelectorAll('[data-act="deleteSong"]').length);
+const [download] = await Promise.all([page.waitForEvent('download'), page.click('[data-act="exportBook"]')]);
+const exported = JSON.parse(fs.readFileSync(await download.path(), 'utf8'));
+const incoming = { ...exported, songs: [{ id: 'my-imported', title: 'From a file', lines: [{ label: 'x', notes: '1 2 3' }], custom: true }] };
+await page.setInputFiles('input[data-act="importFile"]', { name: 'book.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(incoming)) });
+await page.waitForTimeout(300);
+const imported = await page.evaluate(() => ({
+  msg: document.getElementById('scroll').textContent.includes('Loaded 1 song'),
+  have: SONGS.some((x) => x.id === 'my-imported'),
+  mine: SONGS.filter((x) => x.custom).length,
+}));
+
 await browser.close();
 server.close();
 
@@ -193,6 +293,28 @@ const checks = [
   ['a second attempt is recorded too', afterTwo.total === 2],
   ['the weak list appears once there is data', afterTwo.inWay],
   ['the drum is untouched by any of it', backToDrum === 13],
+  ['Happy Birthday is first in the book', book.first === 'birthday'],
+  ['every chord line adds up to its melody', book.drift.length === 0],
+  ['the ukulele filter lists the songs with chords', ukeRows === book.withChords && ukeRows >= 5],
+  ['the play-along draws now and next', uke.diagrams === 2],
+  ['the line shows its chords', uke.chips],
+  ['a 3/4 bar is six strum slots', uke.slots === 6],
+  ['the change says which fingers stay', uke.anchors],
+  ['a bar is counted in', countingIn],
+  ['the strums move the chord on', midLine.playing && midLine.ci >= 0 && midLine.now],
+  ['the line plays out and stops', !endLine.playing && endLine.chord === 'G7'],
+  ['on your own waits on the first chord', armed.armed && armed.n === 2 && armed.chord === 'C'],
+  ['a tap moves to the next change', afterTap === 'G7'],
+  ['the last tap finishes the line', !soloDone.armed && soloDone.done],
+  ['saving says so', saved.toast],
+  ['a saved edit is stored', saved.stored.includes('birthday') && saved.firstNote === '6.'],
+  ['a saved edit survives a reload', afterReload.firstNote === '6.' && afterReload.edited],
+  ['editing the tune keeps the chords', afterReload.chordsKept],
+  ['restoring puts the original back', restored === '5.'],
+  ['a saved capture becomes your song', captured.screen === 'practice' && captured.custom && captured.song === 'My song 1'],
+  ['your songs are listed in the book', listed === 1],
+  ['a copy of the book is a songbook file', exported.kind === 'melodyflow-songbook' && exported.songs.length === 1 && !!exported.drill],
+  ['a copy loads back in', imported.msg && imported.have && imported.mine === 2],
   ['no page errors', errors.length === 0],
 ];
 
@@ -202,5 +324,5 @@ for (const [what, ok] of checks) {
   if (!ok) failed++;
 }
 if (errors.length) console.log(errors.join('\n'));
-if (failed) console.log('afterOne:', JSON.stringify(afterOne), '\nafterTwo:', JSON.stringify(afterTwo));
+if (failed) console.log(JSON.stringify({ afterOne, afterTwo, book, uke, midLine, endLine, armed, afterTap, soloDone, saved, afterReload, restored, captured, listed, imported }, null, 1));
 process.exit(failed ? 1 : 0);

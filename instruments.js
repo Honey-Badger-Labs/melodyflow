@@ -194,9 +194,10 @@
       const fb = root.MF_FRETBOARD;
       return fb ? fb.shapesAfter(name, from, UKE_OPEN, UKE_SHAPES[name]) : [];
     },
-    easiestPath(names) {
+    /** Pass { chart: true } to keep to the chart shapes and solve only the fingers. */
+    easiestPath(names, opts) {
       const fb = root.MF_FRETBOARD;
-      return fb ? fb.easiestPath(names, UKE_OPEN) : null;
+      return fb ? fb.easiestPath(names, UKE_OPEN, opts && opts.chart ? { charts: UKE_SHAPES } : undefined) : null;
     },
   };
 

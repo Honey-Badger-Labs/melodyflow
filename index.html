@@ -50,6 +50,7 @@ input[type=range]{accent-color:var(--color-accent);background:transparent}
 </head>
 <body>
 <div id="phone">
+  <div id="toast" style="position:absolute;left:50%;top:14px;transform:translateX(-50%);z-index:5;pointer-events:none"></div>
   <div id="scroll"></div>
   <nav id="tabbar"></nav>
 </div>
@@ -58,6 +59,8 @@ input[type=range]{accent-color:var(--color-accent);background:transparent}
 <script src="fretboard.js"></script>
 <script src="fretboard-view.js"></script>
 <script src="practice.js"></script>
+<script src="playalong.js"></script>
+<script src="songbook.js"></script>
 <script>
 "use strict";
 /* ════════════════════════════════════════════════════════════════════════
@@ -86,25 +89,38 @@ function lenLabel(d){ return d===1?'':d===0.5?'½':d===1.5?'·':d===2?'– –':
 function parse(str){
   return MF.parseNotation(str).map(e => (e.bar || e.rest) ? e : {pad:e.tok, dur:e.dur, art:e.art});
 }
-const L=(label,s)=>({label,notes:parse(s)});
+/* A lyric line: the melody the drum plays, and optionally the chords the
+   ukulele strums under it, in the same notation. The chords must add up to
+   the same number of beats as the melody; playalong.js reports any that do
+   not, and the smoke test fails on them. */
+const L=(label,s,c)=>({label,notes:parse(s),chords:c?MF.parseNotation(c):null});
 
-const SONGS=[
+const BUILTIN=[
+  // Public domain since 2016. Starts on an upbeat — "Hap-py" comes before the
+  // first bar — so it carries a one-beat pickup and the strums land on "birth".
+  // Pitched from G3 so the whole tune sits on the drum: the octave leap on
+  // "dear" goes up to G4 rather than past the top pad.
+  {id:'birthday',title:'Happy Birthday to You',cat:'Celebration',level:1,bpm:96,meter:'3/4',pickup:1,stars:0,lines:[
+    L('Happy birthday to you','5.*.5 5.*.5 | 6. 5. 1 | 7.*2','0 | C*3 | G7*2'),
+    L('Happy birthday to you','5.*.5 5.*.5 | 6. 5. 2 | 1*2','G7 | G7*3 | C*2'),
+    L('Happy birthday, dear friend','5.*.5 5.*.5 | 5 3 1 | 7. 6.','C | C7*3 | F*2'),
+    L('Happy birthday to you','4*.5 4*.5 | 3 1 2 | 1*3','F | C*2 G7 | C*3')]},
   {id:'twinkle',title:'Twinkle, Twinkle, Little Star',cat:'Nursery',level:1,bpm:84,meter:'4/4',stars:3,lines:[
-    L('Twinkle, twinkle, little star','1 1 5 5 | 6 6 5*2'),L('How I wonder what you are','4 4 3 3 | 2 2 1*2'),
-    L('Up above the world so high','5 5 4 4 | 3 3 2*2'),L('Like a diamond in the sky','5 5 4 4 | 3 3 2*2')]},
+    L('Twinkle, twinkle, little star','1 1 5 5 | 6 6 5*2','C*4 | F*2 C*2'),L('How I wonder what you are','4 4 3 3 | 2 2 1*2','F*2 C*2 | G7*2 C*2'),
+    L('Up above the world so high','5 5 4 4 | 3 3 2*2','C*2 F*2 | C*2 G7*2'),L('Like a diamond in the sky','5 5 4 4 | 3 3 2*2','C*2 F*2 | C*2 G7*2')]},
   {id:'macdonald',title:'Old MacDonald Had a Farm',cat:'Folk',level:1,bpm:96,meter:'4/4',stars:2,lines:[
     L('Old MacDonald had a farm','1 1 1 5. | 6. 6. 5.*2'),L('E-I-E-I-O','3 3 2 2 | 1*2'),
     L('And on that farm he had a cow','1 1 1 5. | 6. 6. 5.*2'),L('E-I-E-I-O','3 3 2 2 | 1*2')]},
   {id:'frere',title:'Frère Jacques',cat:'Round',level:1,bpm:100,meter:'4/4',stars:3,lines:[
-    L('Frère Jacques','1 2 3 1'),L('Frère Jacques','1 2 3 1'),L('Dormez-vous?','3 4 5*2'),
-    L('Sonnez les matines','5*.5 6*.5 5*.5 4*.5 3 1'),L('Ding, ding, dong','1 5. 1*2')]},
+    L('Frère Jacques','1 2 3 1','C*4'),L('Frère Jacques','1 2 3 1','C*4'),L('Dormez-vous?','3 4 5*2','C*4'),
+    L('Sonnez les matines','5*.5 6*.5 5*.5 4*.5 3 1','C*4'),L('Ding, ding, dong','1 5. 1*2','C G7 C*2')]},
   {id:'ode',title:'Ode to Joy',cat:'Beethoven',level:2,bpm:88,meter:'4/4',stars:2,lines:[
-    L('Rising phrase','3 3 4 5'),L('and back down','5 4 3 2'),L('Second phrase','1 1 2 3'),
-    L('resting on 2','3*1.5 2*.5 2*2'),L('Third phrase','3 3 4 5'),L('and back down','5 4 3 2'),
-    L('Fourth phrase','1 1 2 3'),L('home on 1','2*1.5 1*.5 1*2')]},
+    L('Rising phrase','3 3 4 5','C*4'),L('and back down','5 4 3 2','G7*4'),L('Second phrase','1 1 2 3','C*4'),
+    L('resting on 2','3*1.5 2*.5 2*2','C*2 G7*2'),L('Third phrase','3 3 4 5','C*4'),L('and back down','5 4 3 2','G7*4'),
+    L('Fourth phrase','1 1 2 3','C*4'),L('home on 1','2*1.5 1*.5 1*2','G7*2 C*2')]},
   {id:'jingle',title:'Jingle Bells',cat:'Christmas',level:2,bpm:108,meter:'4/4',stars:1,lines:[
-    L('Jingle bells, jingle bells','3 3 3*2 | 3 3 3*2'),L('Jingle all the way','3 5 1 2 | 3*4'),
-    L('Oh what fun it is to ride','4 4 4 4 | 4 3 3 3*.5 3*.5'),L('In a one-horse open sleigh','3 2 2 3 | 2*2 5*2')]},
+    L('Jingle bells, jingle bells','3 3 3*2 | 3 3 3*2','C*4 | C*4'),L('Jingle all the way','3 5 1 2 | 3*4','C*4 | C*4'),
+    L('Oh what fun it is to ride','4 4 4 4 | 4 3 3 3*.5 3*.5','F*4 | C*4'),L('In a one-horse open sleigh','3 2 2 3 | 2*2 5*2','G7*4 | G7*4')]},
   {id:'saints',title:'When the Saints Go Marching In',cat:'Gospel',level:2,bpm:104,meter:'4/4',stars:2,lines:[
     L('Oh when the saints','1 3 4 5*2'),L('go marching in','1 3 4 5*2'),L('Oh when the saints go marching in','5 5 4 3 | 3 2 1'),L('Oh how I want to be in that number','3 3 2 1 | 1*2 5*2')]},
   {id:'scarborough',title:'Scarborough Fair',cat:'Dorian folk',level:2,bpm:76,meter:'3/4',stars:1,lines:[
@@ -122,6 +138,9 @@ const SONGS=[
   {id:'homealone',title:'Somewhere in My Memory',cat:'Film · notebook',level:3,bpm:80,meter:'3/4',stars:0,flag:'timing',lines:[
     L('Opening','5 .1*2 | 7 .1 5'),L('Answer','6 5*2 | 3*3')]}
 ];
+/* The book as shown: the built-ins, your corrections in their place, then
+   the songs that are only yours. Rebuilt by App.refreshSongs(). */
+let SONGS=BUILTIN.slice();
 
 /* Progressions, not songs: what a learner actually drills. Each is solved
    for the cheapest way through it, so the shapes shown are the ones that
@@ -163,7 +182,9 @@ const App = {
     drumMode:'free', drone:false, rec:'idle', hasCap:false, book:'score',
     inst:'drum', ukeMode:'changes', ukeChord:'C', progId:'fifties', step:1,
     drillBpm:90, drillKey:null, drillLive:false, drillLast:null,
-    edNotes:[], edTitle:'', edSub:'', sel:0, rot:0,
+    edNotes:[], edTitle:'', edSub:'', edCtx:null, sel:0, rot:0,
+    ukeSong:'along', strum:'downs', uCi:-1, uT:0, count:0, ukeDone:false,
+    toast:'', bookMsg:'',
     tapMsg:'Terminator is really in 13/8. Tap four bars and I will re-bar it.'
   },
 
@@ -171,22 +192,101 @@ const App = {
   load(){
     try{
       const s=JSON.parse(localStorage.getItem('melodyflow')||'{}');
-      ['songId','line','tempo','rot','mode','drumMode','filter','book','inst','ukeMode','ukeChord','progId','drillBpm'].forEach(k=>{
+      ['songId','line','tempo','rot','mode','drumMode','filter','book','inst','ukeMode','ukeChord','progId','drillBpm','ukeSong','strum'].forEach(k=>{
         if(s[k]!==undefined) this.state[k]=s[k];
       });
       // The decks are kept apart: they are the only thing here a learner would
       // be sorry to lose, and they grow, while everything above is a toggle.
       this.decks=JSON.parse(localStorage.getItem('melodyflow-drill')||'{}');
+      // Songs you wrote or corrected. Kept apart again, and for the same reason.
+      const saved=JSON.parse(localStorage.getItem('melodyflow-songs')||'[]');
+      this.saved=Array.isArray(saved)?saved.map(MF_SONGBOOK.clean).filter(Boolean):[];
+      this.refreshSongs();
       if(!SONGS.some(x=>x.id===this.state.songId)){ this.state.songId='twinkle'; this.state.line=0; }
     }catch(e){}
   },
   save(){
-    const s=this.state, keep={songId:s.songId,line:s.line,tempo:s.tempo,rot:s.rot,mode:s.mode,drumMode:s.drumMode,filter:s.filter,book:s.book,inst:s.inst,ukeMode:s.ukeMode,ukeChord:s.ukeChord,progId:s.progId,drillBpm:s.drillBpm};
+    const s=this.state, keep={songId:s.songId,line:s.line,tempo:s.tempo,rot:s.rot,mode:s.mode,drumMode:s.drumMode,filter:s.filter,book:s.book,inst:s.inst,ukeMode:s.ukeMode,ukeChord:s.ukeChord,progId:s.progId,drillBpm:s.drillBpm,ukeSong:s.ukeSong,strum:s.strum};
     try{ localStorage.setItem('melodyflow',JSON.stringify(keep)); }catch(e){}
     try{ localStorage.setItem('melodyflow-drill',JSON.stringify(this.decks||{})); }catch(e){}
   },
 
   setState(patch){ Object.assign(this.state,patch); this.render(); this.save(); },
+
+  /* ---- your songbook ----
+     Saved songs are text (songbook.js); the book is rebuilt from the
+     built-ins and them whenever either changes. */
+  refreshSongs(){
+    const hydrate=x=>Object.assign({},x,{stars:x.stars||0,lines:x.lines.map(l=>L(l.label,l.notes,l.chords))});
+    SONGS=MF_SONGBOOK.merge(BUILTIN,this.saved||[]).map(e=>
+      e.edited? Object.assign(hydrate(e.song),{edited:true,stars:e.original.stars,flag:e.original.flag})
+      : e.custom? Object.assign(hydrate(e.song),{custom:true})
+      : e.song);
+    this._plan=null;
+  },
+  saveSongs(){
+    try{ localStorage.setItem('melodyflow-songs',JSON.stringify(this.saved||[])); }
+    catch(e){ this.flash('Could not save — this phone is out of room for the app.'); }
+    this.refreshSongs();
+  },
+  flash(msg){
+    this.state.toast=msg; clearTimeout(this._toastT);
+    this._toastT=setTimeout(()=>{ this.state.toast=''; this.renderToast(); },2600);
+    this.renderToast();
+  },
+  saveEdit(){
+    const st=this.state, B=MF_SONGBOOK, ctx=st.edCtx||{kind:'capture'};
+    const notes=st.edNotes.map(n=>n.bar?{bar:true}:n.rest?{rest:true,dur:n.dur}:{pad:n.pad,dur:n.dur});
+    if(!notes.some(n=>!n.bar&&!n.rest)){ this.setState({tapMsg:'Nothing to save yet — there are no notes in it.'}); return; }
+    if(ctx.kind==='line'){
+      const song=SONGS.find(x=>x.id===ctx.songId); if(!song) return;
+      const ser=B.serialize(song);
+      ser.lines[ctx.line]=Object.assign({},ser.lines[ctx.line],{notes:B.write(notes)});
+      if(st.edTitle&&st.edTitle!==song.title) ser.title=st.edTitle;
+      this.saved=B.upsert(this.saved,ser); this.saveSongs();
+      this.setState({screen:st.tab==='play'?'practice':st.tab,songId:song.id,line:ctx.line,cur:-1});
+    } else {
+      const n=(this.saved||[]).filter(x=>x.custom).length+1;
+      const title=(st.edTitle&&st.edTitle!=='Untitled capture')?st.edTitle:'My song '+n;
+      const ser={id:'my-'+Date.now().toString(36),title,cat:'My songs',level:1,bpm:84,meter:'4/4',custom:true,
+                 lines:[{label:'Line 1',notes:B.write(notes)}]};
+      this.saved=B.upsert(this.saved,ser); this.saveSongs();
+      this.setState({tab:'play',screen:'practice',songId:ser.id,line:0,cur:-1});
+    }
+    this.flash('Saved to your songbook.');
+  },
+  /* The whole book as one file. On a phone that is the share sheet — save to
+     Files, AirDrop, email it to yourself; elsewhere, a download. */
+  exportBook(){
+    const data=JSON.stringify(MF_SONGBOOK.bundle({songs:this.saved||[],drill:this.decks||{}}),null,2);
+    const name='melodyflow-songbook-'+new Date().toISOString().slice(0,10)+'.json';
+    let file=null;
+    try{ file=new File([data],name,{type:'application/json'}); }catch(e){}
+    if(file&&navigator.canShare&&navigator.canShare({files:[file]})){
+      navigator.share({files:[file],title:'MelodyFlow songbook'}).catch(()=>{});
+    } else {
+      const a=document.createElement('a');
+      a.href=URL.createObjectURL(file||new Blob([data],{type:'application/json'}));
+      a.download=name; document.body.appendChild(a); a.click();
+      setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); },1500);
+    }
+    this.setState({bookMsg:'Saved a copy of '+((this.saved||[]).length)+' song'+((this.saved||[]).length===1?'':'s')+' and your drill times.'});
+  },
+  importBook(file){
+    if(!file) return;
+    const r=new FileReader();
+    r.onload=()=>{
+      try{
+        const got=MF_SONGBOOK.unbundle(String(r.result));
+        this.saved=MF_SONGBOOK.absorb(this.saved,got.songs);
+        this.decks=Object.assign({},this.decks||{},got.drill);
+        this.saveSongs();
+        this.setState({bookMsg:'Loaded '+got.songs.length+' song'+(got.songs.length===1?'':'s')+(Object.keys(got.drill).length?' and your drill times':'')+'.'+(got.skipped?' '+got.skipped+' could not be read and were left out.':'')});
+      }catch(e){ this.setState({bookMsg:e.message}); }
+    };
+    r.onerror=()=>this.setState({bookMsg:'That file could not be opened.'});
+    r.readAsText(file);
+  },
 
   /* ---- audio ---- */
   ac(){ if(!this._ac) this._ac=new (window.AudioContext||window.webkitAudioContext)();
@@ -293,9 +393,109 @@ const App = {
     this.setState({armed:true, armScope:scope, armItems, armIdx:0, line:f.li, cur:f.idx, playing:false, playScope:null, beat:0, lit:null});
   },
 
+  /* ---- the ukulele play-along ----
+     One plan per song (playalong.js) says when every chord and strum falls.
+     The shapes are solved for the song's whole run of changes, so the
+     fingers that can stay down between chords are shown staying down. */
+  hasUke(s){ return !!s && s.lines.some(l=>l.chords&&l.chords.length); },
+  ukePlan(){
+    const s=this.song(), k=s.id+'|'+this.state.strum;
+    if(!this._plan||this._planKey!==k){ this._planKey=k; this._plan=MF_PLAYALONG.plan(s,{strum:this.state.strum}); this._shapes=null; }
+    return this._plan;
+  },
+  ukeShapes(){
+    const p=this.ukePlan();
+    if(!this._shapes){
+      const uke=MF.instrument('ukulele'), names=p.groups.map(g=>g.chord);
+      const path=names.length?uke.easiestPath(names,{chart:true}):null;
+      this._shapes=names.map((n,i)=>(path&&path.shapes[i])||uke.shapesFor(n)[0]||null);
+    }
+    return this._shapes;
+  },
+  /* Where the play-along is: the beat, and the chord sounding there. Before
+     anything has played, the start of the current line. */
+  ukeWhere(){
+    const st=this.state, p=this.ukePlan(), P=MF_PLAYALONG;
+    const ln=p.lines[st.line]||p.lines[0]||{t:0,dur:0};
+    const t=st.uCi>=0?st.uT:ln.t;
+    let ci=P.chordAt(p.chords,t);
+    if(ci<0) ci=p.chords.findIndex(c=>c.t>=t);
+    return {p,t,ci,gi:ci>=0?p.groupOf[ci]:-1,ln};
+  },
+  click(down,gain){ this.tone(down?1760:1320,0.05,gain===undefined?0.7:gain,[[1,1]]); },
+  lineRange(scope){
+    const p=this.ukePlan(), ln=p.lines[this.state.line]||p.lines[0];
+    return scope==='song'?[0,p.total]:[ln.t,ln.t+ln.dur];
+  },
+  /* Listen: the app strums and plays the tune. Along: it plays the tune and
+     the click, and you strum. Either way one bar is counted in first. */
+  runUke(scope,how){
+    const st=this.state, p=this.ukePlan(), [a,b]=this.lineRange(scope);
+    const bpm=how==='listen'?Math.round(st.tempo*0.8):st.tempo, beatMs=60000/bpm, lead=p.meter, E=1e-6;
+    const ev=[], rank={count:0,click:1,stroke:2,note:3,end:4};
+    for(let i=0;i<lead;i++) ev.push({t:a-lead+i,kind:'count',n:lead-i});
+    p.strokes.forEach(x=>{ if(x.t>=a-E&&x.t<b-E) ev.push({t:x.t,kind:'stroke',x}); });
+    p.melody.forEach(n=>{ if(n.t>=a-E&&n.t<b-E) ev.push({t:n.t,kind:'note',n}); });
+    if(how==='along') p.clicks.forEach(c=>{ if(c.t>=a-E&&c.t<b-E) ev.push({t:c.t,kind:'click',c}); });
+    ev.push({t:b,kind:'end'});
+    ev.sort((x,y)=>x.t-y.t||rank[x.kind]-rank[y.kind]);
+
+    this._stopped=true; clearTimeout(this._seqT); clearInterval(this._beatT);
+    this._stopped=false;
+    const t0=performance.now()+80, when=t=>t0+(t-(a-lead))*beatMs;
+    let i=0;
+    this.setState({playing:true,playScope:scope,armed:false,count:lead,uT:a,uCi:-1,ukeDone:false});
+    const tick=()=>{
+      if(this._stopped) return;
+      const now=performance.now(); let patch=null;
+      while(i<ev.length&&when(ev[i].t)<=now+4){
+        const e=ev[i++];
+        if(e.kind==='count'){ this.click(e.n===lead); patch=Object.assign(patch||{},{count:e.n}); }
+        else if(e.kind==='click'){ this.click(e.c.down,0.35); }
+        else if(e.kind==='note'){ this.tone(hz(e.n.tok),Math.min(2,e.n.dur*beatMs/1000+0.3),how==='listen'?0.8:0.5);
+          if(e.n.li!==this.state.line||this.state.count) patch=Object.assign(patch||{},{line:e.n.li,count:0}); }
+        else if(e.kind==='stroke'){ if(how==='listen') this.playToken('ukulele',e.x.chord,e.x.art);
+          patch=Object.assign(patch||{},{count:0,uT:e.x.t,uCi:e.x.ci,line:p.chords[e.x.ci].li}); }
+        else if(e.kind==='end'){ clearInterval(this._beatT); this.setState({playing:false,playScope:null,count:0}); return; }
+      }
+      if(patch) this.setState(patch);
+      if(i<ev.length) this._seqT=setTimeout(tick,Math.max(0,when(ev[i].t)-performance.now()));
+    };
+    this._beatT=setInterval(()=>{
+      const t=(performance.now()-t0)/beatMs+(a-lead), ln=p.lines[this.state.line];
+      if(ln&&ln.dur) this._beat(Math.max(0,Math.min(1,(t-ln.t)/ln.dur)));
+    },45);
+    tick();
+  },
+  /* On your own: nothing moves until you do. Each chord change waits for a
+     tap — make the shape, strum it, tap. The listening step will replace the
+     tap with the microphone. */
+  startUkeSolo(scope){
+    const p=this.ukePlan(), [a,b]=this.lineRange(scope), E=1e-6;
+    const items=p.groups.map((g,gi)=>gi).filter(gi=>p.groups[gi].end>a+E&&p.groups[gi].t<b-E);
+    if(!items.length) return;
+    const g=p.groups[items[0]];
+    this._stopped=true; clearTimeout(this._seqT); clearInterval(this._beatT);
+    this.setState({armed:true,armScope:scope,armItems:items,armIdx:0,uCi:g.first,uT:Math.max(a,g.t),
+                   line:p.chords[g.first].li,playing:false,playScope:null,count:0,ukeDone:false});
+  },
+  ukeTap(){
+    const st=this.state, w=this.ukeWhere();
+    if(!st.armed){ if(w.ci>=0) this.playToken('ukulele',w.p.chords[w.ci].chord,'d'); return; }
+    const p=w.p, cur=p.groups[st.armItems[st.armIdx]];
+    this.playToken('ukulele',cur.chord,'d');
+    const next=st.armIdx+1;
+    if(next<st.armItems.length){
+      const g=p.groups[st.armItems[next]];
+      this.setState({armIdx:next,uCi:g.first,uT:g.t,line:p.chords[g.first].li});
+    } else {
+      this.setState({armed:false,armScope:null,armItems:[],armIdx:0,ukeDone:true});
+    }
+  },
+
   /* ---- sequencing ---- */
   stop(){ this._stopped=true; clearTimeout(this._seqT); clearInterval(this._beatT);
-          this.setState({playing:false,playScope:null,cur:-1,beat:0,lit:null,armed:false,armScope:null,armItems:[],armIdx:0}); },
+          this.setState({playing:false,playScope:null,cur:-1,beat:0,lit:null,armed:false,armScope:null,armItems:[],armIdx:0,count:0,uCi:-1}); },
   _beat(p){ this.state.beat=p; const el=document.getElementById('mf-beat'); if(el) el.style.width=Math.round(p*100)+'%'; },
   run(items,bpm,scope,even){
     this._stopped=false;
@@ -320,9 +520,9 @@ const App = {
 
   /* ---- capture + editor ---- */
   capNotes(){ if(!this._cap) this._cap=parse('1 1 5 5 | 6 6 5*2 | 4 4 3*2'); return this._cap; },
-  openEditor(title,notes,sub){
+  openEditor(title,notes,sub,ctx){
     const n=notes.map(x=>Object.assign({},x));
-    this.setState({screen:'editor',edTitle:title,edSub:sub,edNotes:n,sel:n.findIndex(x=>!x.bar)});
+    this.setState({screen:'editor',edTitle:title,edSub:sub,edCtx:ctx||null,edNotes:n,sel:n.findIndex(x=>!x.bar)});
   },
   patch(fn){ const ns=this.state.edNotes.slice(); fn(ns,this.state.sel); this.setState({edNotes:ns}); },
 
@@ -393,8 +593,10 @@ const App = {
 
   screenLibrary(){
     const st=this.state, s=this.song();
-    const filters=[['all','All'],['fix','Needs fixing'],['l1','Level 1'],['l2','Level 2'],['christmas','Christmas'],['film','Film']];
+    const filters=[['all','All'],['uke','Ukulele'],['mine','Mine'],['fix','Needs fixing'],['l1','Level 1'],['l2','Level 2'],['christmas','Christmas'],['film','Film']];
     const rows=SONGS.filter(x=> st.filter==='all'?true
+        : st.filter==='uke'?this.hasUke(x)
+        : st.filter==='mine'?!!(x.custom||x.edited)
         : st.filter==='fix'?!!x.flag
         : st.filter==='l1'?x.level===1
         : st.filter==='l2'?x.level===2
@@ -429,7 +631,10 @@ const App = {
       <div style="display:flex;flex-direction:column;gap:7px;margin-top:13px">
         ${rows.map(x=>{
           const stars='★★★☆☆☆'.slice(3-x.stars,6-x.stars);
-          const flag=x.flag?`<span style="flex:none;font:600 8.5px ui-monospace,Menlo,monospace;letter-spacing:.12em;text-transform:uppercase;padding:3px 6px;border-radius:var(--radius-sm);border:1px solid ${x.flag==='timing'?'#7a6a4a':'#5d5294'};color:${x.flag==='timing'?'#e0c79a':'#d2cefd'}">${x.flag}</span>`:'';
+          const tag=(t,bc,fg)=>`<span style="flex:none;font:600 8.5px ui-monospace,Menlo,monospace;letter-spacing:.12em;text-transform:uppercase;padding:3px 6px;border-radius:var(--radius-sm);border:1px solid ${bc};color:${fg}">${t}</span>`;
+          const flag=(x.flag?tag(x.flag,x.flag==='timing'?'#7a6a4a':'#5d5294',x.flag==='timing'?'#e0c79a':'#d2cefd'):'')
+            +(this.hasUke(x)?tag('uke','#4d7a68','#8fd0b4'):'')
+            +(x.custom?tag('mine','#595d6c','#b2b6ca'):x.edited?tag('edited','#595d6c','#b2b6ca'):'');
           return `<button data-act="openSong" data-id="${x.id}" style="width:100%;display:flex;align-items:center;gap:11px;text-align:left;padding:11px 12px;border-radius:var(--radius-md);border:1px solid var(--color-neutral-900);background:var(--color-surface);color:inherit;cursor:pointer">
             <div style="flex:none;width:34px;height:34px;border-radius:var(--radius-sm);display:grid;place-items:center;background:var(--color-bg);border:1px solid var(--color-neutral-800);font:600 11px ui-monospace,Menlo,monospace;color:var(--color-accent-300)">${x.lines.length}</div>
             <div style="flex:1;min-width:0">
@@ -483,6 +688,7 @@ const App = {
         </div>
         <button data-act="editThis" style="height:34px;flex:none;padding:0 11px;border-radius:var(--radius-md);border:1px solid var(--color-neutral-800);background:var(--color-surface);color:var(--color-neutral-400);font:500 11.5px Inter,sans-serif;cursor:pointer">Edit</button>
       </div>
+      ${this.practiceInst()}
 
       <div style="display:flex;align-items:center;gap:16px;margin-top:14px;padding:0 4px">
         <div style="flex:none;display:flex;align-items:flex-start;gap:3px;line-height:.82;color:var(--color-accent-300);font-size:${big?'100px':'78px'}">
@@ -522,6 +728,104 @@ const App = {
           <span style="font:400 11px ui-monospace,Menlo,monospace;color:var(--color-neutral-700)">${st.line+1} / ${s.lines.length}</span>
           <button data-act="nextLine" style="border:0;background:none;color:var(--color-accent-400);font:500 12px Inter,sans-serif;cursor:pointer;padding:4px 2px">next line ›</button>
         </div>
+      </div>
+    </div>`;
+  },
+
+  /* On a song with chords: which instrument you are practising it on. */
+  practiceInst(){
+    const st=this.state, s=this.song();
+    const restore=s.edited?`<button data-act="restoreSong" style="border:0;background:none;color:var(--color-neutral-600);font:500 11px Inter,sans-serif;cursor:pointer;padding:6px 2px 0">Edited · restore the original</button>`:'';
+    if(!this.hasUke(s)) return restore?`<div style="text-align:center">${restore}</div>`:'';
+    return `<div style="display:flex;gap:5px;margin-top:11px;padding:3px;border-radius:var(--radius-md);background:#292b31;border:1px solid var(--color-neutral-800)">${
+      this.seg([['drum','Tongue drum',30,12],['ukulele','Ukulele',30,12]],st.inst==='ukulele'?'ukulele':'drum','playInst')}</div>${restore?`<div style="text-align:center">${restore}</div>`:''}`;
+  },
+
+  /* The ukulele play-along. What a learner needs at every moment: the chord
+     now, the chord next and how long until it, where to strum, and which
+     fingers can stay down through the change. */
+  screenUkePractice(){
+    const st=this.state, s=this.song(), V=MF_FRETBOARD_VIEW, P=MF_PLAYALONG;
+    const w=this.ukeWhere(), p=w.p, shapes=this.ukeShapes();
+    const cur=w.gi>=0?shapes[w.gi]:null, prev=w.gi>0?shapes[w.gi-1]:null;
+    const nx=w.gi>=0&&w.gi+1<p.groups.length?w.gi+1:-1, next=nx>=0?shapes[nx]:null;
+    const inBeats=nx>=0?p.groups[nx].t-Math.max(w.t,p.groups[w.gi].t):0;
+    const beatsTxt=b=>{ const r=Math.round(b*2)/2; return (r===1?'1 beat':(String(r).replace('.5','½'))+' beats'); };
+    const anchors=(cur&&next)?next.placements.filter(q=>V.anchored(q,cur)).length:0;
+    const solo=st.ukeSong==='solo';
+
+    const heroKicker=st.count?`Count in · ${st.count}`:st.armed?'Make it, strum it, tap it':st.playing?'Now':'First chord';
+    const hero=cur?`<div data-act="ukeTap" style="flex:1.25;min-width:0;padding:10px 10px 8px;border-radius:var(--radius-lg);cursor:pointer;border:1px solid ${st.armed?'var(--color-accent)':'var(--color-neutral-900)'};background:${st.armed?'#241f3d':'var(--color-surface)'}">
+        <div style="font:600 9.5px/1 ui-monospace,Menlo,monospace;letter-spacing:.18em;text-transform:uppercase;color:${st.count?'var(--color-accent-300)':'var(--color-neutral-600)'};text-align:center">${heroKicker}</div>
+        <div style="max-width:150px;margin:6px auto 0">${V.chord(cur,{from:prev,label:cur.chord})}</div>
+      </div>`:'';
+    const upNext=next?`<div style="flex:1;min-width:0;padding:10px 10px 8px;border-radius:var(--radius-lg);border:1px solid var(--color-neutral-900);background:var(--color-surface);opacity:.85">
+        <div style="font:600 9.5px/1 ui-monospace,Menlo,monospace;letter-spacing:.18em;text-transform:uppercase;color:var(--color-neutral-600);text-align:center">${solo?'Then':'Next · in '+beatsTxt(inBeats)}</div>
+        <div style="max-width:112px;margin:6px auto 0">${V.chord(next,{from:cur,label:next.chord})}</div>
+        <div style="text-align:center;font:400 10.5px/1.35 Inter,sans-serif;color:${anchors?'#8fd0b4':'var(--color-neutral-600)'};margin-top:4px">${anchors===0?'Whole hand moves':anchors===1?'1 finger stays':anchors+' fingers stay'}</div>
+      </div>`:`<div style="flex:1;min-width:0;padding:10px;border-radius:var(--radius-lg);border:1px dashed var(--color-neutral-800);display:grid;place-items:center;text-align:center;font:400 12px/1.5 Inter,sans-serif;color:var(--color-neutral-600)">${st.ukeDone?'That is the end. Nicely played.':'Last chord — let it ring.'}</div>`;
+
+    // The bar you are in, as half-beat slots: an arrow where the pattern strums.
+    const bar=P.barOf(p,w.t), off=w.t-bar, slots=[];
+    for(let o=0;o<p.meter;o+=0.5){
+      const hit=p.pattern.strokes.find(x=>Math.abs(x[0]-o)<1e-6);
+      const now=(st.playing||st.armed)&&hit&&Math.abs(off-o)<1e-6&&st.uCi>=0;
+      slots.push(`<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:3px">
+        <div style="height:30px;width:100%;max-width:34px;border-radius:var(--radius-sm);display:grid;place-items:center;font:600 17px Inter,sans-serif;background:${now?'var(--color-accent)':hit?'#2b2741':'transparent'};color:${now?'#171927':hit?'var(--color-accent-200)':'var(--color-neutral-800)'}">${hit?(hit[1]==='u'?'↑':'↓'):'·'}</div>
+        <div style="font:500 9.5px ui-monospace,Menlo,monospace;color:${Number.isInteger(o)?'var(--color-neutral-500)':'var(--color-neutral-700)'}">${P.countLabel(o)}</div></div>`);
+    }
+
+    // This line's chords, as wide as they last, over its words.
+    const lc=(s.lines[st.line]&&s.lines[st.line].chords)||[];
+    const curIdx=w.ci>=0&&p.chords[w.ci].li===st.line?p.chords[w.ci].idx:-1;
+    const chips=lc.map((e,idx)=>e.bar?'':`<div style="flex:${e.dur||1};min-width:0;height:34px;border-radius:var(--radius-sm);display:flex;align-items:center;padding:0 8px;font:500 13.5px Inter,sans-serif;white-space:nowrap;overflow:hidden;border:1px solid ${idx===curIdx?'var(--color-accent)':'var(--color-neutral-800)'};background:${idx===curIdx?'#3b336b':'transparent'};color:${e.rest?'var(--color-neutral-700)':idx===curIdx?'#f5f4ff':'var(--color-neutral-400)'}">${e.rest?'–':esc(e.tok)}</div>`).join('');
+
+    const modes=[['along','Play along'],['solo','On your own']];
+    const strums=[['downs','All downs'],['pattern',P.patternFor(s.meter,'pattern').name]];
+    const lineBusy=(st.playing&&st.playScope==='line')||(st.armed&&st.armScope==='line');
+    const songBusy=(st.playing&&st.playScope==='song')||(st.armed&&st.armScope==='song');
+    const hint=solo
+      ?(st.armed?'Make the lit shape, strum it, then tap it. Nothing moves until you do.':'Practise a line and the chords wait for you: tap each one once it rings.')
+      :'One bar is counted in. The app plays the tune and the click; you strum where the arrow lights.';
+    const problems=p.problems.length?`<div style="margin-top:10px;font:400 11.5px/1.5 Inter,sans-serif;color:#e0c79a">Line ${p.problems[0].li+1}'s chords last ${p.problems[0].chords} beats but its tune lasts ${p.problems[0].melody}, so they will drift.</div>`:'';
+
+    return `<div style="padding:0 16px 14px">
+      <div style="display:flex;align-items:center;gap:10px">
+        <button data-act="back" style="width:34px;height:34px;flex:none;border-radius:var(--radius-md);border:1px solid var(--color-neutral-800);background:var(--color-surface);color:var(--color-neutral-400);font-size:15px;cursor:pointer">‹</button>
+        <div style="flex:1;min-width:0;text-align:center">
+          <div style="font:500 13.5px Inter,sans-serif;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(s.title)}</div>
+          <div style="font:400 10.5px ui-monospace,Menlo,monospace;letter-spacing:.1em;color:var(--color-neutral-600);margin-top:2px">${s.meter} · ${p.groups.length} changes · ${[...new Set(p.groups.map(g=>g.chord))].join(' ')}</div>
+        </div>
+        <div style="width:34px;flex:none"></div>
+      </div>
+      ${this.practiceInst()}
+
+      <div style="display:flex;gap:10px;margin-top:12px;align-items:stretch">${hero}${upNext}</div>
+
+      <div style="margin-top:12px;display:flex;align-items:flex-end;gap:2px">${slots.join('')}</div>
+
+      <div style="margin-top:12px;display:flex;gap:4px">${chips}</div>
+      <div style="font:400 12.5px/1.4 Inter,sans-serif;color:var(--color-neutral-500);margin-top:6px;text-align:center">${esc(s.lines[st.line]?s.lines[st.line].label:'')}</div>
+      <div style="height:3px;border-radius:2px;background:#292b31;margin-top:9px;overflow:hidden"><div id="mf-beat" style="height:100%;background:var(--color-accent);border-radius:2px;transition:width .08s linear;width:${Math.round(st.beat*100)}%"></div></div>
+      ${problems}
+
+      <div style="margin-top:12px;display:flex;gap:5px;padding:3px;border-radius:var(--radius-md);background:#292b31;border:1px solid var(--color-neutral-800)">${this.seg(modes,st.ukeSong,'ukeSong')}</div>
+      <div style="margin-top:6px;display:flex;gap:5px;padding:3px;border-radius:var(--radius-md);background:#292b31;border:1px solid var(--color-neutral-800)">${this.seg(strums,st.strum,'strum',)}</div>
+      <div style="font:400 11px/1.5 Inter,sans-serif;color:var(--color-neutral-600);margin-top:8px;text-align:center;text-wrap:pretty">${hint}</div>
+      <div style="display:flex;align-items:center;gap:11px;margin-top:10px">
+        <span style="font:600 9.5px ui-monospace,Menlo,monospace;letter-spacing:.18em;text-transform:uppercase;color:var(--color-neutral-600)">Tempo</span>
+        <input type="range" min="40" max="126" step="2" data-act="setTempo" value="${st.tempo}" style="flex:1">
+        <span style="font:500 12px ui-monospace,Menlo,monospace;color:var(--color-accent-300);width:54px;text-align:right">${st.tempo} bpm</span>
+      </div>
+      <div style="display:flex;gap:9px;margin-top:11px">
+        <button data-act="ukeListen" style="flex:1;height:44px;border-radius:var(--radius-md);border:1px solid var(--color-neutral-700);background:transparent;color:var(--color-neutral-300);font:500 14px Inter,sans-serif;cursor:pointer">Listen</button>
+        <button data-act="ukeLine" style="flex:1.3;height:44px;border-radius:var(--radius-md);border:1px solid var(--color-accent);background:#2b2741;color:var(--color-accent-200);font:500 14px Inter,sans-serif;cursor:pointer">${lineBusy?'Stop':solo?'Practise line':'Play line'}</button>
+      </div>
+      <button data-act="ukeWhole" style="width:100%;height:40px;margin-top:8px;border-radius:var(--radius-md);border:1px solid var(--color-accent-700);background:${songBusy?'#423a6a':'transparent'};color:var(--color-accent-300);font:500 13px Inter,sans-serif;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px"><span style="font-size:11px">▶▶</span>${songBusy?'Stop':solo?'Practise song':'Play whole song'}</button>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-top:9px">
+        <button data-act="prevLine" style="border:0;background:none;color:var(--color-neutral-600);font:500 12px Inter,sans-serif;cursor:pointer;padding:4px 2px">‹ previous line</button>
+        <span style="font:400 11px ui-monospace,Menlo,monospace;color:var(--color-neutral-700)">${st.line+1} / ${s.lines.length}</span>
+        <button data-act="nextLine" style="border:0;background:none;color:var(--color-accent-400);font:500 12px Inter,sans-serif;cursor:pointer;padding:4px 2px">next line ›</button>
       </div>
     </div>`;
   },
@@ -743,7 +1047,7 @@ const App = {
       <div style="display:flex;align-items:center;gap:10px">
         <button data-act="back" style="width:34px;height:34px;flex:none;border-radius:var(--radius-md);border:1px solid var(--color-neutral-800);background:var(--color-surface);color:var(--color-neutral-400);font-size:15px;cursor:pointer">‹</button>
         <div style="flex:1;min-width:0;text-align:center">
-          <div style="font:500 13.5px Inter,sans-serif;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(st.edTitle)}</div>
+          <div data-act="rename" style="font:500 13.5px Inter,sans-serif;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer">${esc(st.edTitle)} <span style="color:var(--color-neutral-600);font-size:11px">✎</span></div>
           <div style="font:400 10.5px ui-monospace,Menlo,monospace;letter-spacing:.1em;color:var(--color-neutral-600);margin-top:2px">${esc(st.edSub)}</div>
         </div>
         <button data-act="saveEdit" style="height:34px;flex:none;padding:0 12px;border-radius:var(--radius-md);border:1px solid var(--color-accent);background:#2b2741;color:var(--color-accent-200);font:500 12px Inter,sans-serif;cursor:pointer">Save</button>
@@ -781,7 +1085,7 @@ const App = {
 
   screenBook(){
     const st=this.state;
-    const bookTabs=[['score','Arrangements',32,12],['reg','Register',32,12]];
+    const bookTabs=[['score','Arrangements',32,12],['mine','Your songs',32,12],['reg','Register',32,12]];
     let body='';
     if(st.book==='score'){
       body=`<div style="display:flex;flex-direction:column;gap:12px;margin-top:15px">
@@ -796,10 +1100,31 @@ const App = {
               const notes=l.notes.map(n=>n.bar?'|':(n.rest?'0':n.pad)+(n.dur===1?'':'*'+n.dur)).join(' ');
               return `<div style="display:flex;gap:11px;align-items:baseline">
                 <div style="flex:none;width:92px;font:400 10.5px/1.4 Inter,sans-serif;color:var(--color-neutral-700);text-align:right">${esc(l.label)}</div>
-                <div style="flex:1;font:400 13.5px/1.5 ui-monospace,Menlo,monospace;color:var(--color-accent-300);letter-spacing:.05em">${esc(notes)}</div></div>`;
+                <div style="flex:1;min-width:0"><div style="font:400 13.5px/1.5 ui-monospace,Menlo,monospace;color:var(--color-accent-300);letter-spacing:.05em">${esc(notes)}</div>${
+                  l.chords&&l.chords.length?`<div style="font:400 11.5px/1.5 ui-monospace,Menlo,monospace;color:#8fd0b4;letter-spacing:.05em">${esc(MF_SONGBOOK.write(l.chords))}</div>`:''}</div></div>`;
             }).join('')}
           </div></div>`).join('')}
       </div>`;
+    } else if(st.book==='mine'){
+      const mine=SONGS.filter(x=>x.custom||x.edited);
+      const btn='flex:1;height:40px;border-radius:var(--radius-md);font:500 13px Inter,sans-serif;cursor:pointer;display:flex;align-items:center;justify-content:center';
+      body=`<div style="margin-top:15px;padding:14px;border-radius:var(--radius-lg);border:1px solid var(--color-neutral-800);background:var(--color-surface)">
+          <div style="font:400 12.5px/1.6 Inter,sans-serif;color:var(--color-neutral-500);text-wrap:pretty">Songs you write or correct live on this phone. Save a copy somewhere safe — Files, email, a cloud drive — so a new phone or a reinstall does not lose them. The copy includes your drill times.</div>
+          <div style="display:flex;gap:8px;margin-top:12px">
+            <button data-act="exportBook" style="${btn};border:1px solid var(--color-accent);background:#2b2741;color:var(--color-accent-200)">Save a copy</button>
+            <label style="${btn};border:1px solid var(--color-neutral-700);color:var(--color-neutral-300)">Load a copy<input type="file" accept="application/json,.json" data-act="importFile" style="display:none"></label>
+          </div>
+          ${st.bookMsg?`<div style="margin-top:10px;font:400 12px/1.5 Inter,sans-serif;color:var(--color-accent-300)">${esc(st.bookMsg)}</div>`:''}
+        </div>
+        <div style="display:flex;flex-direction:column;gap:7px;margin-top:13px">
+          ${mine.length?mine.map(x=>`<div style="display:flex;align-items:center;gap:10px;padding:11px 12px;border-radius:var(--radius-md);border:1px solid var(--color-neutral-900);background:var(--color-surface)">
+            <button data-act="openSong" data-id="${x.id}" style="flex:1;min-width:0;text-align:left;border:0;background:none;color:inherit;cursor:pointer;padding:0">
+              <div style="font:500 13.5px Inter,sans-serif;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(x.title)}</div>
+              <div style="font:400 11px Inter,sans-serif;color:var(--color-neutral-600);margin-top:3px">${x.custom?'Yours':'Your correction of a built-in song'} · ${x.lines.length} line${x.lines.length===1?'':'s'}</div>
+            </button>
+            <button data-act="${x.custom?'deleteSong':'restoreSong'}" data-id="${x.id}" style="flex:none;border:0;background:none;color:var(--color-neutral-600);font:500 11.5px Inter,sans-serif;cursor:pointer">${x.custom?'delete':'restore'}</button>
+          </div>`).join(''):`<div style="font:400 12.5px/1.6 Inter,sans-serif;color:var(--color-neutral-600);text-wrap:pretty">Nothing here yet. Edit a song and save it, or capture one — it will appear here.</div>`}
+        </div>`;
     } else {
       body=`<div style="display:flex;flex-direction:column;gap:8px;margin-top:15px">
         ${REGISTER.map(r=>{
@@ -834,7 +1159,7 @@ const App = {
     let html='';
     switch(st.screen){
       case 'library': html=this.screenLibrary(); break;
-      case 'practice': html=this.screenPractice(); break;
+      case 'practice': html=(st.inst==='ukulele'&&this.hasUke(this.song()))?this.screenUkePractice():this.screenPractice(); break;
       case 'drum': html=this.screenDrum(); break;
       case 'capture': html=this.screenCapture(); break;
       case 'editor': html=this.screenEditor(); break;
@@ -842,6 +1167,12 @@ const App = {
     }
     document.getElementById('scroll').innerHTML=html;
     document.getElementById('tabbar').innerHTML=this.tabbar();
+    this.renderToast();
+  },
+  renderToast(){
+    const el=document.getElementById('toast'); if(!el) return;
+    const m=this.state.toast;
+    el.innerHTML=m?`<div style="padding:8px 14px;border-radius:999px;background:#3b336b;border:1px solid var(--color-accent);color:#f5f4ff;font:500 12.5px Inter,sans-serif;white-space:nowrap;box-shadow:0 8px 24px rgba(0,0,0,.4)">${esc(m)}</div>`:'';
   },
 
   /* ---- action dispatch (event delegation; avoids id lookups entirely) ---- */
@@ -854,7 +1185,30 @@ const App = {
       case 'filter': this.setState({filter:ds.v}); break;
       case 'openSong': this.stop(); this.setState({songId:ds.id,line:0,screen:'practice',cur:-1}); break;
       case 'back': this.stop(); this.setState({screen:st.tab==='play'?'library':st.tab}); break;
-      case 'editThis': this.openEditor(s.title,s.lines[st.line].notes,'Line '+(st.line+1)+' · '+s.meter); break;
+      case 'editThis': this.openEditor(s.title,s.lines[st.line].notes,'Line '+(st.line+1)+' · '+s.meter,{kind:'line',songId:s.id,line:st.line}); break;
+      case 'playInst': this.stop(); this.setState({inst:ds.v}); break;
+      case 'ukeSong': this.stop(); this.setState({ukeSong:ds.v}); break;
+      case 'strum': this.stop(); this.setState({strum:ds.v}); break;
+      case 'ukeTap': this.ukeTap(); break;
+      case 'ukeListen': if(st.playing) this.stop(); else this.runUke('line','listen'); break;
+      case 'ukeLine':
+        if(st.ukeSong==='solo'){ if(st.armed) this.stop(); else this.startUkeSolo('line'); }
+        else if(st.playing) this.stop(); else this.runUke('line','along');
+        break;
+      case 'ukeWhole':
+        if(st.ukeSong==='solo'){ if(st.armed) this.stop(); else { this.setState({line:0,uCi:-1}); this.startUkeSolo('song'); } }
+        else if(st.playing) this.stop(); else { this.setState({line:0,uCi:-1}); this.runUke('song','along'); }
+        break;
+      case 'rename': { const t=window.prompt('Name this song',st.edTitle); if(t&&t.trim()) this.setState({edTitle:t.trim().slice(0,80)}); } break;
+      case 'exportBook': this.exportBook(); break;
+      case 'importFile': this.importBook(ev.target.files&&ev.target.files[0]); ev.target.value=''; break;
+      case 'restoreSong': { const id=ds.id||s.id, x=SONGS.find(y=>y.id===id);
+          if(x&&window.confirm('Put “'+x.title+'” back the way it came? Your changes to it will be lost.')){
+            this.saved=(this.saved||[]).filter(y=>y.id!==id); this.saveSongs(); this.render(); this.flash('Restored the original.'); } } break;
+      case 'deleteSong': { const x=SONGS.find(y=>y.id===ds.id);
+          if(x&&window.confirm('Delete “'+x.title+'” from your songbook?')){
+            this.saved=(this.saved||[]).filter(y=>y.id!==ds.id); this.saveSongs();
+            if(st.songId===ds.id) this.setState({songId:'twinkle',line:0}); else this.render(); } } break;
       case 'strike': this.strike(ds.pad); break;
       case 'mode': this.stop(); this.setState({mode:ds.v}); break;
       case 'setTempo': this.setState({tempo:+ev.target.value}); break;
@@ -893,7 +1247,7 @@ const App = {
           setTimeout(()=>this.setState({rec:'idle',hasCap:true}),3000); } break;
       case 'playCapture': this.stop(); setTimeout(()=>this.run(this.capNotes().map((n,idx)=>({n,li:0,idx})).filter(x=>!x.n.bar),84,'line'),60); break;
       case 'editCapture': { const n=this.capNotes().map(x=>Object.assign({},x)); if(n[6])n[6].uncertain=true; if(n[10])n[10].uncertain=true;
-          this.openEditor('Untitled capture',n,'11 notes · ≈84 bpm'); } break;
+          this.openEditor('Untitled capture',n,'11 notes · ≈84 bpm',{kind:'capture'}); } break;
       case 'selNote': { const i=+ds.i; this.setState({sel:i}); const nn=st.edNotes[i]; if(nn&&nn.pad) this.tone(hz(nn.pad),1.3); } break;
       case 'hearSel': { const sel=st.edNotes[st.sel]; if(sel&&sel.pad) this.tone(hz(sel.pad),1.5); } break;
       case 'pitchUp': this.patch((ns,i)=>{ const k=ORDER.indexOf(ns[i]&&ns[i].pad); if(k>=0&&k<12){ ns[i]={pad:ORDER[k+1],dur:ns[i].dur}; this.tone(hz(ORDER[k+1]),1.2); } }); break;
@@ -902,7 +1256,7 @@ const App = {
       case 'makeRest': this.patch((ns,i)=>{ if(ns[i]) ns[i]={rest:true,dur:ns[i].dur}; }); break;
       case 'dupNote': this.patch((ns,i)=>{ if(ns[i]) ns.splice(i+1,0,Object.assign({},ns[i])); }); break;
       case 'delNote': { const ns=st.edNotes.slice(); ns.splice(st.sel,1); this.setState({edNotes:ns,sel:Math.max(0,st.sel-1)}); } break;
-      case 'saveEdit': this.setState({screen:st.tab==='play'?'practice':st.tab,tapMsg:'Saved to the book.'}); break;
+      case 'saveEdit': this.saveEdit(); break;
       case 'tapTempo': {
         const now=performance.now();
         this._taps=(this._taps||[]).filter(t=>now-t<2600); this._taps.push(now);
@@ -913,7 +1267,7 @@ const App = {
         } else this.setState({tapMsg:'Keep tapping…'});
       } break;
       case 'book': this.setState({book:ds.v}); break;
-      case 'scoreEdit': { const x=SONGS.find(y=>y.id===ds.id); if(x) this.openEditor(x.title,x.lines[0].notes,'Line 1 · '+x.meter); } break;
+      case 'scoreEdit': { const x=SONGS.find(y=>y.id===ds.id); if(x) this.openEditor(x.title,x.lines[0].notes,'Line 1 · '+x.meter,{kind:'line',songId:x.id,line:0}); } break;
     }
   },
 

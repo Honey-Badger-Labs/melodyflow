@@ -261,8 +261,17 @@
    * fingering) states — the same reason you plan a route rather than turning
    * down whichever road looks widest.
    */
-  function easiestPath(names, tuning) {
-    const stages = names.map((n) => shapesFor(n, tuning));
+  function easiestPath(names, tuning, opts) {
+    // Given the charts, hold every chord to the shape a beginner is taught and
+    // leave only the fingering to the solver — a play-along teaches the chart
+    // G7, not the cheaper one at the fourth fret. A chord with no chart shape
+    // falls back to every shape.
+    const charts = opts && opts.charts;
+    const stages = names.map((n) => {
+      const all = shapesFor(n, tuning, charts && charts[n]);
+      const taught = charts ? all.filter((sh) => sh.canonical) : [];
+      return taught.length ? taught : all;
+    });
     if (stages.some((s) => s.length === 0)) return null;
 
     let frontier = stages[0].map((shape) => ({ shape, total: restCost(shape), via: null }));

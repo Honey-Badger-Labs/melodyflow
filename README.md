@@ -21,24 +21,49 @@ arrangement editable.
 
 | Tab | What it does |
 |---|---|
-| **Play** | The songbook (library) → a practice screen: next note huge, the whole line as a scrolling ribbon with a moving beat marker, and the pad lit on the drum. Three modes — **Notes only** (steady even pulse), **With rhythm** (real durations), and **On your own** (guided practice: nothing auto-plays — the next note lights up and you advance by tapping the correct pad yourself; *Listen* still plays it for you). Tempo, previous/next line. |
+| **Play** | The songbook (library) → a practice screen: next note huge, the whole line as a scrolling ribbon with a moving beat marker, and the pad lit on the drum. Three modes — **Notes only** (steady even pulse), **With rhythm** (real durations), and **On your own** (guided practice: nothing auto-plays — the next note lights up and you advance by tapping the correct pad yourself; *Listen* still plays it for you). Tempo, previous/next line. Songs with chords (tagged **uke**, and a *Ukulele* filter) switch to the ukulele play-along — see below. |
 | **Drum** | The virtual drum — Free play, Improvise (drone + pentatonic lifted forward), and Layout. Rotate the wheel; tap any pad to hear it. |
 | **Capture** | Record a phrase (simulated transcription in this build) → a draft that lands in the editor and can be saved to the book. |
-| **Book** | Every arrangement written out, plus the decision register (in / adapted / corrected / out / queued, each with its reason). |
+| **Book** | Every arrangement written out with its chords, **Your songs** (what you have written or corrected, and a saved copy of the whole book), and the decision register (in / adapted / corrected / out / queued, each with its reason). |
 
 The **note editor** is reachable from any song (Play → Edit, Book → edit, or a
 capture): tap a note to select it, then change pitch, octave and length, insert a
 rest, duplicate or delete, and tap-tempo the four transcriptions whose timing is
-still wrong.
+still wrong. **Save** keeps it: a corrected built-in song replaces the original in
+the book (and can be restored), and a saved capture becomes a song of your own.
+Tap the title to rename it.
+
+## Playing along on the ukulele
+
+A song can carry a chord line under each lyric line. Open one and switch the
+practice screen from *Tongue drum* to *Ukulele*:
+
+- **The chord now, and the chord next** — both drawn, with how many beats until
+  the change and which fingers can stay down through it. Shapes are the ones a
+  chord chart teaches; only the fingering is solved across the song's changes.
+- **Where to strum** — the bar as half-beat slots, `1 & 2 & 3 &`, with an arrow
+  where the strum goes. *All downs* to start with, then a pattern with upstrokes
+  (`D - D U - U D U` in 4/4, `D D U D U` in 3/4).
+- **The line's chords over its words**, each as wide as it lasts.
+- **Play along** counts in a bar, then plays the tune and a click while you strum.
+  **Listen** strums it for you. **On your own** waits: make the shape, strum it,
+  tap it, and it moves to the next change.
+
+Chords are in: Happy Birthday, Twinkle Twinkle, Frère Jacques (one chord — the
+place to start), Ode to Joy and Jingle Bells. The timing is worked out in
+`playalong.js`; a chord line that does not add up to its melody line is reported
+on the screen and fails the smoke test.
 
 ## Files
 
 | File | What it is |
 |---|---|
-| `index.html` | The app — engine, 13 arrangements, songbook, register, capture, editor. Vanilla JS, no build step. |
+| `index.html` | The app — engine, 14 arrangements, songbook, register, capture, editor. Vanilla JS, no build step. |
 | `instruments.js` | The instrument model: which tokens exist, what pitches each one sounds, how it is voiced — plus the notation grammar they share. Loaded before the app, imported by the tests. |
 | `fretboard.js` | Where the fingers go, and what it costs to get there from the shape you are already holding. Searches the fretboard from the notes of the chord; holds no chord pictures. |
 | `fretboard-view.js` | Draws a chord box, and the thing chord boxes never show: the finger that is already where it needs to be. Strings in, markup out — no state, no events. |
+| `playalong.js` | When every chord, strum and melody note falls, pickups included, for the play-along. No DOM, no audio, no clock — times are in beats. |
+| `songbook.js` | Your songs: saved as text in the book's own notation, merged over the built-ins, and written to / read from a songbook file. No DOM. |
 | `practice.js` | The drill scheduler: which change to put up next, and what your times say about it. No DOM, no audio, no clock — latencies go in as numbers. |
 | `test/` | `npm test` runs the unit tests on node's own runner, no dependencies. `npm run smoke` loads the page in a browser and skips itself if Playwright is absent. |
 | `manifest.webmanifest` | Makes it installable. |
@@ -139,22 +164,29 @@ octave (`5.` `6.` `7.`), a dot **over** it means the high octave (`.1` `.2` `.3`
 | `3` | pad 3, one beat |
 | `3*2` `3*.5` `3*1.5` | held two beats / half a beat / dotted |
 | `0` | a rest |
+| `C*3` `G7*2` | in a chord line: a chord held three beats / two |
 | `\|` | a bar line |
 
 The drum layout (centre pad, then clockwise from twelve): `5. · 6. .2 7 1 5 3 7. 4 6 2 .1 .3`
 
 ## Where things are kept
 
-Progress and preferences (current song, line, tempo, drum rotation, modes) live in
-your browser's local storage on that device. Nothing leaves it.
+Everything lives in your browser's local storage on that device, and nothing
+leaves it on its own: progress and preferences, your drill times, and your songs.
+
+Local storage goes when the app is deleted or the site's data is cleared, so
+**Book → Your songs → Save a copy** writes your songs and drill times to a file
+(the share sheet on a phone — save it to Files, a cloud drive or email). **Load a
+copy** reads one back; songs in the file replace the phone's copy of the same
+song and nothing else is removed.
 
 ## Notes on this build
 
 - Audio is a synthesised approximation of the drum (a few sine partials), not the
   real instrument.
 - Capture is a working UI with a **simulated** transcription — the microphone /
-  pitch-detection engine is the future-iteration piece; the recording flow, draft,
-  editor hand-off and "save to book" path are all real.
+  pitch-detection engine is the next piece; the recording flow, draft, editor
+  hand-off and saving to the book are real.
 - The four notebook transcriptions (Terminator, Low Rider, Can't Help Falling in
   Love, Somewhere in My Memory) are flagged `timing` and carry placeholder even-beat
   notation pending real corrections.

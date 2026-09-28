@@ -108,7 +108,9 @@ test('every ukulele shape names four strings and reachable frets', () => {
  */
 test('regression: the songbook parses exactly as it did before', () => {
   const html = fs.readFileSync(path.join(here, '..', 'index.html'), 'utf8');
-  const lines = [...html.matchAll(/L\('(?:[^']|\\')*',\s*'([^']+)'\)/g)].map((m) => m[1]);
+  // A line may carry the ukulele's chords as a third argument; only the
+  // melody, the second, is the drum's.
+  const lines = [...html.matchAll(/L\('(?:[^']|\\')*',\s*'([^']+)'(?:,\s*'[^']*')?\)/g)].map((m) => m[1]);
   assert.ok(lines.length >= 40, `expected the whole songbook, found ${lines.length} lines`);
 
   // The parser as it was, before instruments existed.

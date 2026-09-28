@@ -148,3 +148,12 @@ test('a progression it cannot play says so rather than guessing', () => {
   assert.equal(FB.easiestPath(['C', 'Hmaj9'], T), null);
   assert.deepEqual(FB.shapesFor('Zm', T), []);
 });
+
+test('held to the charts, the path teaches the shapes a beginner learns', () => {
+  const song = ['C', 'G7', 'C', 'C7', 'F', 'C', 'G7', 'C'];
+  const taught = uke.easiestPath(song, { chart: true });
+  taught.shapes.forEach((sh, i) =>
+    assert.deepEqual(sh.frets, uke.shapes[song[i]], `${song[i]} left the chart`));
+  // Only the fingers were free, so it can cost no less than the open search.
+  assert.ok(taught.total >= uke.easiestPath(song).total);
+});
