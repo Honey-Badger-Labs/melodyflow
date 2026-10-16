@@ -69,3 +69,24 @@ test('a line becomes columns, bars and rests kept', () => {
   assert.match(html, /G4: G string, open/);
   assert.equal((html.match(/role="listitem"/g) || []).length, 5);
 });
+
+const song = (...lines) => ({ lines: lines.map((l) => ({ notes: MF.parseNotation(l).map((e) => (e.bar ? e : { pad: e.tok, dur: e.dur })) })) });
+
+test('suitability: in range, shifted but same shape, shape broken', () => {
+  assert.equal(T.suitability(song('1 2 3 5 6')).uke, 'good');
+  // 5. 6. 7. all lift together: still rising.
+  assert.equal(T.suitability(song('5. 6. 7.')).uke, 'shifted');
+  // 7. (B3) up to 1 (C4) becomes B4 down to C4.
+  const s = T.suitability(song('7. 1'));
+  assert.equal(s.uke, 'poor');
+  assert.equal(s.broken, 1);
+  assert.equal(s.drum, 'good');
+});
+
+test('suitability: a song can override it', () => {
+  const s = song('7. 1');
+  s.suit = { uke: 'good', drum: 'poor' };
+  assert.deepEqual([T.suitability(s).uke, T.suitability(s).drum], ['good', 'poor']);
+  assert.match(T.badges(s), /Not ideal on drum/);
+  assert.match(T.badges(song('1 2')), /aria-label="Suits the ukulele/);
+});

@@ -811,7 +811,7 @@ const App = {
           const stars='★★★☆☆☆'.slice(3-x.stars,6-x.stars);
           const tag=(t,bc,fg)=>`<span style="flex:none;font:600 8.5px ui-monospace,Menlo,monospace;letter-spacing:.12em;text-transform:uppercase;padding:3px 6px;border-radius:var(--radius-sm);border:1px solid ${bc};color:${fg}">${t}</span>`;
           const flag=(x.flag?tag(x.flag,x.flag==='timing'?'#7a6a4a':'#5d5294',x.flag==='timing'?'#e0c79a':'#d2cefd'):'')
-            +(this.hasUke(x)?tag('uke','#4d7a68','#8fd0b4'):'')
+            +(this.hasUke(x)?tag('uke','#4d7a68','#8fd0b4'):'')+MF_TAB.badges(x)
             +(x.custom?tag('mine','#595d6c','#b2b6ca'):x.edited?tag('edited','#595d6c','#b2b6ca'):'');
           return `<button data-act="openSong" data-id="${x.id}" style="width:100%;display:flex;align-items:center;gap:11px;text-align:left;padding:11px 12px;border-radius:var(--radius-md);border:1px solid var(--color-neutral-900);background:var(--color-surface);color:inherit;cursor:pointer">
             <div style="flex:none;width:34px;height:34px;border-radius:var(--radius-sm);display:grid;place-items:center;background:var(--color-bg);border:1px solid var(--color-neutral-800);font:600 11px ui-monospace,Menlo,monospace;color:var(--color-accent-300)">${x.lines.length}</div>
@@ -934,8 +934,9 @@ const App = {
   practiceInst(){
     const st=this.state, s=this.song();
     const restore=s.edited?`<button data-act="restoreSong" style="border:0;background:none;color:var(--color-neutral-600);font:500 11px Inter,sans-serif;cursor:pointer;padding:6px 2px 0">Edited · restore the original</button>`:'';
-    if(!this.hasUke(s)) return restore?`<div style="text-align:center">${restore}</div>`:'';
-    return `<div style="display:flex;gap:5px;margin-top:11px;padding:3px;border-radius:var(--radius-md);background:#292b31;border:1px solid var(--color-neutral-800)">${
+    const bdg=`<div style="display:flex;gap:5px;justify-content:center;flex-wrap:wrap;margin-top:8px">${MF_TAB.badges(s)}</div>`;
+    if(!this.hasUke(s)) return bdg+(restore?`<div style="text-align:center">${restore}</div>`:'');
+    return bdg+`<div style="display:flex;gap:5px;margin-top:11px;padding:3px;border-radius:var(--radius-md);background:#292b31;border:1px solid var(--color-neutral-800)">${
       this.seg([['drum','Tongue drum',30,12],['ukulele','Ukulele',30,12]],st.inst==='ukulele'?'ukulele':'drum','playInst')}</div>${restore?`<div style="text-align:center">${restore}</div>`:''}`;
   },
 
@@ -1314,6 +1315,7 @@ const App = {
             <button data-act="scoreEdit" data-id="${x.id}" style="border:0;background:none;color:var(--color-accent-400);font:500 11.5px Inter,sans-serif;cursor:pointer;flex:none">edit</button>
           </div>
           <div style="font:400 10.5px ui-monospace,Menlo,monospace;letter-spacing:.12em;color:var(--color-neutral-600);margin-top:3px">${esc(x.cat)} · ${x.bpm} bpm · ${x.meter}</div>
+          <div style="display:flex;gap:5px;flex-wrap:wrap;margin-top:6px">${MF_TAB.badges(x)}</div>
           <button data-act="toggleTab" aria-pressed="${st.showTab}" style="min-height:30px;border:0;background:none;color:var(--color-accent-300);font:500 11.5px Inter,sans-serif;cursor:pointer;padding:4px 0">${st.showTab?'Hide uke tab':'Show uke tab'}</button>
           <div style="margin-top:10px;display:flex;flex-direction:column;gap:6px">
             ${x.lines.map(l=>{

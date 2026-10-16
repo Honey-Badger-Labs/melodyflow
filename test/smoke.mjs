@@ -291,6 +291,7 @@ await page.evaluate(() => App.stop());
 await page.evaluate(() => App.setState({ tab: 'book', screen: 'book', book: 'score' }));
 await page.waitForTimeout(150);
 const tabBook = await page.evaluate(() => ({
+  badges: document.querySelectorAll('#scroll span[role="img"][aria-label]').length,
   tabs: document.querySelectorAll('#scroll [role="list"]').length,
   boxes: document.querySelectorAll('#scroll [data-act="hearChord"] svg').length,
 }));
@@ -406,6 +407,7 @@ const checks = [
   ['the uke tab draws a column per note', tabDrum.cells >= 6 && /C4: C string, open/.test(tabDrum.first || '')],
   ['the uke tab lights the note playing (drum)', tabLit.lit && tabLit.cur >= 0],
   ['the uke tab lights the note playing (play-along)', tabUke.lit && tabUke.n >= 0],
+  ['the book shows suitability badges', tabBook.badges >= 8],
   ['the book shows tab and chord boxes', tabBook.tabs > 4 && tabBook.boxes >= 2],
   ['loop comes round again', looped === true],
   ['MF is on the page', probe.mf === 'object'],

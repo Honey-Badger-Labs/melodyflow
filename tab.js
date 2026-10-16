@@ -103,5 +103,48 @@
       </div></div>`;
   }
 
-  root.MF_TAB = { OPEN, NAMES, ROWS, MAX_FRET, hzToMidi, noteName, place, placePad, columns, render };
+  /**
+   * How well a song suits each instrument. Every song is written for the drum,
+   * so the drum is always fine unless the song says otherwise. On the uke:
+   *   'good'    every note in range
+   *   'shifted' some notes go up an octave but every step still moves the way
+   *             the tune does
+   *   'poor'    the octave shift turns a step up into a step down (or back)
+   * A song may override either with `suit: { drum, uke }`.
+   */
+  function suitability(song) {
+    const o = (song && song.suit) || {};
+    const notes = [];
+    (song && song.lines || []).forEach((l) => columns(l.notes).forEach((c) => {
+      if (!c.bar && !c.rest) notes.push(c);
+    }));
+    let uke = 'good', shifted = 0, broken = 0;
+    for (let i = 0; i < notes.length; i++) {
+      if (notes[i].shifted) shifted++;
+      if (i) {
+        const a = notes[i - 1], b = notes[i];
+        const was = Math.sign((b.midi - b.shifted) - (a.midi - a.shifted));
+        const now = Math.sign(b.midi - a.midi);
+        if (was !== now) broken++;
+      }
+    }
+    if (shifted) uke = broken ? 'poor' : 'shifted';
+    const chords = (song && song.lines || []).some((l) => l.chords && l.chords.length);
+    return { drum: o.drum || 'good', uke: o.uke || uke, chords, shifted, broken };
+  }
+
+  /** The badges, as accessible markup. */
+  function badges(song) {
+    const s = suitability(song);
+    const tag = (t, aria, bc, fg) => `<span role="img" aria-label="${esc(aria)}" title="${esc(aria)}" style="flex:none;font:600 8.5px ui-monospace,Menlo,monospace;letter-spacing:.12em;text-transform:uppercase;padding:3px 6px;border-radius:4px;border:1px solid ${bc};color:${fg}">${t}</span>`;
+    const ok = (bc, fg) => [bc, fg];
+    const out = [];
+    out.push(s.drum === 'poor' ? tag('Not ideal on drum', 'Not ideal on the tongue drum', '#7a6a4a', '#e0c79a') : tag('Drum', 'Suits the tongue drum', ...ok('#5d5294', '#d2cefd')));
+    if (s.uke === 'good') out.push(tag('Ukulele', 'Suits the ukulele: every note in range', '#4d7a68', '#8fd0b4'));
+    else if (s.uke === 'shifted') out.push(tag('Uke · octave up', 'Works on ukulele with some notes an octave up', '#4d7a68', '#8fd0b4'));
+    else out.push(tag('Not ideal on uke', 'Not ideal on ukulele: the octave shift changes the shape of the tune', '#7a6a4a', '#e0c79a'));
+    return out.join('');
+  }
+
+  root.MF_TAB = { OPEN, NAMES, ROWS, MAX_FRET, hzToMidi, noteName, place, placePad, columns, render, suitability, badges };
 })(typeof globalThis !== 'undefined' ? globalThis : this);
