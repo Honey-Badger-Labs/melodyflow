@@ -60,6 +60,7 @@ input[type=range]{accent-color:var(--color-accent);background:transparent}
 <script src="fretboard-view.js"></script>
 <script src="practice.js"></script>
 <script src="playalong.js"></script>
+<script src="tab.js"></script>
 <script src="songbook.js"></script>
 <script src="listen.js"></script>
 <script>
@@ -210,6 +211,7 @@ const App = {
     drillBpm:90, drillKey:null, drillLive:false, drillLast:null,
     edNotes:[], edTitle:'', edSub:'', edCtx:null, sel:0, rot:0,
     ukeSong:'along', strum:'downs', uCi:-1, uT:0, count:0, ukeDone:false,
+    showTab:true, loop:false, uN:-1,
     toast:'', bookMsg:'',
     micOn:false, mic:'off', heard:null, capInfo:null,
     tapMsg:'Terminator is really in 13/8. Tap four bars and I will re-bar it.'
@@ -624,11 +626,13 @@ const App = {
         const e=ev[i++];
         if(e.kind==='count'){ this.click(e.n===lead); patch=Object.assign(patch||{},{count:e.n}); }
         else if(e.kind==='click'){ this.click(e.c.down,0.35); }
-        else if(e.kind==='note'){ this.tone(hz(e.n.tok),Math.min(2,e.n.dur*beatMs/1000+0.3),how==='listen'?0.8:0.5);
+        else if(e.kind==='note'){ patch=Object.assign(patch||{},{uN:p.melody.indexOf(e.n)}); this.tone(hz(e.n.tok),Math.min(2,e.n.dur*beatMs/1000+0.3),how==='listen'?0.8:0.5);
           if(e.n.li!==this.state.line||this.state.count) patch=Object.assign(patch||{},{line:e.n.li,count:0}); }
         else if(e.kind==='stroke'){ if(how==='listen') this.playToken('ukulele',e.x.chord,e.x.art);
           patch=Object.assign(patch||{},{count:0,uT:e.x.t,uCi:e.x.ci,line:p.chords[e.x.ci].li}); }
-        else if(e.kind==='end'){ clearInterval(this._beatT); this.setState({playing:false,playScope:null,count:0}); return; }
+        else if(e.kind==='end'){ clearInterval(this._beatT);
+          if(this.state.loop&&scope==='line'){ this.runUke(scope,how); return; }
+          this.setState({playing:false,playScope:null,count:0,uN:-1}); return; }
       }
       if(patch) this.setState(patch);
       if(i<ev.length) this._seqT=setTimeout(tick,Math.max(0,when(ev[i].t)-performance.now()));
@@ -667,7 +671,7 @@ const App = {
 
   /* ---- sequencing ---- */
   stop(){ this._stopped=true; clearTimeout(this._seqT); clearInterval(this._beatT);
-          this.setState({playing:false,playScope:null,cur:-1,beat:0,lit:null,armed:false,armScope:null,armItems:[],armIdx:0,count:0,uCi:-1}); },
+          this.setState({playing:false,playScope:null,cur:-1,beat:0,lit:null,armed:false,armScope:null,armItems:[],armIdx:0,count:0,uCi:-1,uN:-1}); },
   _beat(p){ this.state.beat=p; const el=document.getElementById('mf-beat'); if(el) el.style.width=Math.round(p*100)+'%'; },
   run(items,bpm,scope,even){
     this._stopped=false;
@@ -675,7 +679,9 @@ const App = {
     const step=()=>{
       if(this._stopped) return;
       const it=items[i];
-      if(!it){ this.setState({playing:false,playScope:null,cur:-1,beat:0,lit:null}); return; }
+      if(!it){
+        if(this.state.loop&&scope==='line'&&items.length){ i=0; this._seqT=setTimeout(step,beatMs); return; }
+        this.setState({playing:false,playScope:null,cur:-1,beat:0,lit:null}); return; }
       const n=it.n, ms=(even?1:n.dur)*beatMs, t0=performance.now();
       const gap=(items[i+1]&&items[i+1].li!==it.li)?380:0;
       this.setState({line:it.li,cur:it.idx,playing:true,playScope:scope||'line',lit:n.pad||null,beat:0});
@@ -805,7 +811,7 @@ const App = {
           const stars='★★★☆☆☆'.slice(3-x.stars,6-x.stars);
           const tag=(t,bc,fg)=>`<span style="flex:none;font:600 8.5px ui-monospace,Menlo,monospace;letter-spacing:.12em;text-transform:uppercase;padding:3px 6px;border-radius:var(--radius-sm);border:1px solid ${bc};color:${fg}">${t}</span>`;
           const flag=(x.flag?tag(x.flag,x.flag==='timing'?'#7a6a4a':'#5d5294',x.flag==='timing'?'#e0c79a':'#d2cefd'):'')
-            +(this.hasUke(x)?tag('uke','#4d7a68','#8fd0b4'):'')
+            +(this.hasUke(x)?tag('uke','#4d7a68','#8fd0b4'):'')+MF_TAB.badges(x)
             +(x.custom?tag('mine','#595d6c','#b2b6ca'):x.edited?tag('edited','#595d6c','#b2b6ca'):'');
           return `<button data-act="openSong" data-id="${x.id}" style="width:100%;display:flex;align-items:center;gap:11px;text-align:left;padding:11px 12px;border-radius:var(--radius-md);border:1px solid var(--color-neutral-900);background:var(--color-surface);color:inherit;cursor:pointer">
             <div style="flex:none;width:34px;height:34px;border-radius:var(--radius-sm);display:grid;place-items:center;background:var(--color-bg);border:1px solid var(--color-neutral-800);font:600 11px ui-monospace,Menlo,monospace;color:var(--color-accent-300)">${x.lines.length}</div>
@@ -879,6 +885,7 @@ const App = {
         <div style="display:flex;align-items:center;gap:6px;transition:transform .26s cubic-bezier(.22,.9,.3,1);transform:translateX(-${Math.max(0,idxNow-2)*52}px)">${chips}</div>
       </div>
       <div style="height:3px;border-radius:2px;background:#292b31;margin-top:8px;overflow:hidden"><div id="mf-beat" style="height:100%;background:var(--color-accent);border-radius:2px;transition:width .08s linear;width:${Math.round(st.beat*100)}%"></div></div>
+      ${this.tabPanel(notes,st.cur)}
 
       <div style="padding:10px 0">${this.wheel(pads,'min(62vw, 240px)')}</div>
 
@@ -888,8 +895,9 @@ const App = {
         ${this.micRow('Turn on the mic and play your real drum — the right note moves you on.')}`:''}
         <div style="display:flex;align-items:center;gap:11px;margin-top:11px">
           <span style="font:600 9.5px ui-monospace,Menlo,monospace;letter-spacing:.18em;text-transform:uppercase;color:var(--color-neutral-600)">Tempo</span>
-          <input type="range" min="50" max="126" step="2" data-act="setTempo" value="${st.tempo}" style="flex:1">
+          <input type="range" min="40" max="126" step="2" data-act="setTempo" aria-label="Tempo" value="${st.tempo}" style="flex:1">
           <span style="font:500 12px ui-monospace,Menlo,monospace;color:var(--color-accent-300);width:54px;text-align:right">${st.tempo} bpm</span>
+          ${this.loopBtn()}
         </div>
         <div style="display:flex;gap:9px;margin-top:11px">
           <button data-act="listen" style="flex:1;height:44px;border-radius:var(--radius-md);border:1px solid var(--color-neutral-700);background:transparent;color:var(--color-neutral-300);font:500 14px Inter,sans-serif;cursor:pointer">Listen</button>
@@ -905,12 +913,30 @@ const App = {
     </div>`;
   },
 
+  /* The line as ukulele tab — the drum's "number on the pad" for the uke:
+     the number on the string is the fret. Lit in time with playback. */
+  tabPanel(notes,cur,kicker){
+    const st=this.state;
+    const head=`<div style="display:flex;align-items:center;justify-content:space-between;margin-top:12px">
+      <span style="font:600 9.5px ui-monospace,Menlo,monospace;letter-spacing:.18em;text-transform:uppercase;color:var(--color-neutral-500)">${kicker||'Ukulele'} tab</span>
+      <button data-act="toggleTab" aria-pressed="${st.showTab}" style="min-height:32px;border:0;background:none;color:var(--color-accent-300);font:500 12px Inter,sans-serif;cursor:pointer;padding:4px 2px">${st.showTab?'Hide tab':'Show uke tab'}</button></div>`;
+    if(!st.showTab) return head;
+    const cols=MF_TAB.columns(notes);
+    const lifted=cols.some(c=>c.shifted);
+    return head+`<div style="margin-top:4px;padding:8px 8px 6px;border-radius:var(--radius-md);background:#20222c;border:1px solid var(--color-neutral-800)">${MF_TAB.render(cols,{cur,id:'mf-tab',label:'Ukulele tab for this line, A string on top'})}</div>
+      <div style="font:400 10.5px/1.4 Inter,sans-serif;color:var(--color-neutral-500);margin-top:4px">Top line is the A string. The number is the fret; 0 is open.${lifted?' Dotted numbers are an octave up — the drum goes lower than a uke.':''}</div>`;
+  },
+  loopBtn(){
+    const on=this.state.loop;
+    return `<button data-act="toggleLoop" aria-pressed="${on}" aria-label="Loop this line" style="flex:none;min-height:32px;padding:0 10px;border-radius:var(--radius-sm);border:1px solid ${on?'var(--color-accent)':'var(--color-neutral-700)'};background:${on?'#3b336b':'transparent'};color:${on?'#e7e5fe':'var(--color-neutral-400)'};font:500 11.5px Inter,sans-serif;cursor:pointer">⟲ Loop</button>`;
+  },
   /* On a song with chords: which instrument you are practising it on. */
   practiceInst(){
     const st=this.state, s=this.song();
     const restore=s.edited?`<button data-act="restoreSong" style="border:0;background:none;color:var(--color-neutral-600);font:500 11px Inter,sans-serif;cursor:pointer;padding:6px 2px 0">Edited · restore the original</button>`:'';
-    if(!this.hasUke(s)) return restore?`<div style="text-align:center">${restore}</div>`:'';
-    return `<div style="display:flex;gap:5px;margin-top:11px;padding:3px;border-radius:var(--radius-md);background:#292b31;border:1px solid var(--color-neutral-800)">${
+    const bdg=`<div style="display:flex;gap:5px;justify-content:center;flex-wrap:wrap;margin-top:8px">${MF_TAB.badges(s)}</div>`;
+    if(!this.hasUke(s)) return bdg+(restore?`<div style="text-align:center">${restore}</div>`:'');
+    return bdg+`<div style="display:flex;gap:5px;margin-top:11px;padding:3px;border-radius:var(--radius-md);background:#292b31;border:1px solid var(--color-neutral-800)">${
       this.seg([['drum','Tongue drum',30,12],['ukulele','Ukulele',30,12]],st.inst==='ukulele'?'ukulele':'drum','playInst')}</div>${restore?`<div style="text-align:center">${restore}</div>`:''}`;
   },
 
@@ -979,6 +1005,7 @@ const App = {
 
       <div style="margin-top:12px;display:flex;gap:4px">${chips}</div>
       <div style="font:400 12.5px/1.4 Inter,sans-serif;color:var(--color-neutral-500);margin-top:6px;text-align:center">${esc(s.lines[st.line]?s.lines[st.line].label:'')}</div>
+      ${this.tabPanel(this.lineNotes(),st.uN>=0&&p.melody[st.uN]&&p.melody[st.uN].li===st.line?p.melody[st.uN].idx:-1,'Melody')}
       <div style="height:3px;border-radius:2px;background:#292b31;margin-top:9px;overflow:hidden"><div id="mf-beat" style="height:100%;background:var(--color-accent);border-radius:2px;transition:width .08s linear;width:${Math.round(st.beat*100)}%"></div></div>
       ${problems}
 
@@ -988,8 +1015,9 @@ const App = {
       ${solo?this.micRow('Turn on the mic and strum — the right chord moves you on.'):''}
       <div style="display:flex;align-items:center;gap:11px;margin-top:10px">
         <span style="font:600 9.5px ui-monospace,Menlo,monospace;letter-spacing:.18em;text-transform:uppercase;color:var(--color-neutral-600)">Tempo</span>
-        <input type="range" min="40" max="126" step="2" data-act="setTempo" value="${st.tempo}" style="flex:1">
+        <input type="range" min="40" max="126" step="2" data-act="setTempo" aria-label="Tempo" value="${st.tempo}" style="flex:1">
         <span style="font:500 12px ui-monospace,Menlo,monospace;color:var(--color-accent-300);width:54px;text-align:right">${st.tempo} bpm</span>
+          ${this.loopBtn()}
       </div>
       <div style="display:flex;gap:9px;margin-top:11px">
         <button data-act="ukeListen" style="flex:1;height:44px;border-radius:var(--radius-md);border:1px solid var(--color-neutral-700);background:transparent;color:var(--color-neutral-300);font:500 14px Inter,sans-serif;cursor:pointer">Listen</button>
@@ -1266,6 +1294,15 @@ const App = {
     </div>`;
   },
 
+  /* Every chord a song uses, as the chart shape, side by side. */
+  chordBoxes(x){
+    if(!this.hasUke(x)) return '';
+    const uke=MF.instrument('ukulele');
+    const names=[...new Set(x.lines.flatMap(l=>(l.chords||[]).filter(e=>!e.bar&&!e.rest).map(e=>e.tok)))];
+    const boxes=names.map(n=>{ const sh=uke.shapesFor(n)[0]; return sh?`<div data-act="hearChord" data-v="${esc(n)}" style="width:76px;cursor:pointer">${MF_FRETBOARD_VIEW.chord(sh,{label:n})}</div>`:''; }).join('');
+    return `<div style="margin-top:10px;font:600 9.5px ui-monospace,Menlo,monospace;letter-spacing:.18em;text-transform:uppercase;color:var(--color-neutral-500)">Chords in this song</div>
+      <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:6px">${boxes}</div>`;
+  },
   screenBook(){
     const st=this.state;
     const bookTabs=[['score','Arrangements',32,12],['mine','Your songs',32,12],['reg','Register',32,12]];
@@ -1278,15 +1315,18 @@ const App = {
             <button data-act="scoreEdit" data-id="${x.id}" style="border:0;background:none;color:var(--color-accent-400);font:500 11.5px Inter,sans-serif;cursor:pointer;flex:none">edit</button>
           </div>
           <div style="font:400 10.5px ui-monospace,Menlo,monospace;letter-spacing:.12em;color:var(--color-neutral-600);margin-top:3px">${esc(x.cat)} · ${x.bpm} bpm · ${x.meter}</div>
+          <div style="display:flex;gap:5px;flex-wrap:wrap;margin-top:6px">${MF_TAB.badges(x)}</div>
+          <button data-act="toggleTab" aria-pressed="${st.showTab}" style="min-height:30px;border:0;background:none;color:var(--color-accent-300);font:500 11.5px Inter,sans-serif;cursor:pointer;padding:4px 0">${st.showTab?'Hide uke tab':'Show uke tab'}</button>
           <div style="margin-top:10px;display:flex;flex-direction:column;gap:6px">
             ${x.lines.map(l=>{
               const notes=l.notes.map(n=>n.bar?'|':(n.rest?'0':n.pad)+(n.dur===1?'':'*'+n.dur)).join(' ');
               return `<div style="display:flex;gap:11px;align-items:baseline">
                 <div style="flex:none;width:92px;font:400 10.5px/1.4 Inter,sans-serif;color:var(--color-neutral-700);text-align:right">${esc(l.label)}</div>
                 <div style="flex:1;min-width:0"><div style="font:400 13.5px/1.5 ui-monospace,Menlo,monospace;color:var(--color-accent-300);letter-spacing:.05em">${esc(notes)}</div>${
-                  l.chords&&l.chords.length?`<div style="font:400 11.5px/1.5 ui-monospace,Menlo,monospace;color:#8fd0b4;letter-spacing:.05em">${esc(MF_SONGBOOK.write(l.chords))}</div>`:''}</div></div>`;
+                  l.chords&&l.chords.length?`<div style="font:400 11.5px/1.5 ui-monospace,Menlo,monospace;color:#8fd0b4;letter-spacing:.05em">${esc(MF_SONGBOOK.write(l.chords))}</div>`:''}${
+                  st.showTab?`<div style="margin-top:4px">${MF_TAB.render(MF_TAB.columns(l.notes),{label:'Ukulele tab: '+l.label})}</div>`:''}</div></div>`;
             }).join('')}
-          </div></div>`).join('')}
+          </div>${this.chordBoxes(x)}</div>`).join('')}
       </div>`;
     } else if(st.book==='mine'){
       const mine=SONGS.filter(x=>x.custom||x.edited);
@@ -1350,6 +1390,10 @@ const App = {
     }
     document.getElementById('scroll').innerHTML=html;
     document.getElementById('tabbar').innerHTML=this.tabbar();
+    const tb=document.getElementById('mf-tab'), now=tb&&tb.querySelector('[data-tab-now]');
+    if(tb){ tb.style.scrollBehavior='auto'; tb.scrollLeft=this._tabX||0;
+      if(now){ tb.style.scrollBehavior='smooth'; tb.scrollLeft=Math.max(0,now.offsetLeft-tb.clientWidth/3); }
+      this._tabX=now?Math.max(0,now.offsetLeft-tb.clientWidth/3):0; }
     this.renderToast();
     this.syncMic();
   },
@@ -1399,6 +1443,8 @@ const App = {
       case 'strike': this.strike(ds.pad); break;
       case 'mode': this.stop(); this.setState({mode:ds.v}); break;
       case 'setTempo': this.setState({tempo:+ev.target.value}); break;
+      case 'toggleTab': this.setState({showTab:!st.showTab}); break;
+      case 'toggleLoop': this.setState({loop:!st.loop}); break;
       case 'listen': this.stop(); setTimeout(()=>this.run(this.itemsForLine(st.line),Math.round(st.tempo*0.8),'line'),60); break;
       case 'playLine':
         if(st.mode==='solo'){ if(st.armed) this.stop(); else this.startSolo('line'); }
