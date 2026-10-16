@@ -271,6 +271,37 @@ const imported = await page.evaluate(() => ({
   mine: SONGS.filter((x) => x.custom).length,
 }));
 
+// ── Ukulele tab ───────────────────────────────────────────────────────────
+await page.evaluate(() => { App.stop(); App.setState({ tab: 'play', screen: 'practice', songId: 'twinkle', inst: 'drum', line: 0, cur: -1, showTab: true, loop: false, mode: 'guided' }); });
+await page.waitForTimeout(150);
+const tabDrum = await page.evaluate(() => ({
+  cells: document.querySelectorAll('#mf-tab [role="listitem"]').length,
+  first: document.querySelector('#mf-tab [role="listitem"]')?.getAttribute('aria-label'),
+}));
+await page.evaluate(() => App.setState({ tempo: 126 }));
+await page.click('[data-act="playLine"]');
+await page.waitForTimeout(1200);
+const tabLit = await page.evaluate(() => ({ lit: !!document.querySelector('#mf-tab [aria-current="true"]'), cur: App.state.cur }));
+await page.evaluate(() => App.stop());
+await page.evaluate(() => App.setState({ songId: "birthday", inst: "ukulele", ukeSong: "along", line: 0, uCi: -1 }));
+await page.click('[data-act="ukeLine"]');
+await page.waitForFunction(() => App.state.uN >= 0 || !App.state.playing, null, { timeout: 8000 }).catch(() => {});
+const tabUke = await page.evaluate(() => ({ lit: !!document.querySelector('#mf-tab [aria-current="true"]'), n: App.state.uN }));
+await page.evaluate(() => App.stop());
+await page.evaluate(() => App.setState({ tab: 'book', screen: 'book', book: 'score' }));
+await page.waitForTimeout(150);
+const tabBook = await page.evaluate(() => ({
+  tabs: document.querySelectorAll('#scroll [role="list"]').length,
+  boxes: document.querySelectorAll('#scroll [data-act="hearChord"] svg').length,
+}));
+// Loop: a one-line play-through comes round again instead of stopping.
+await page.evaluate(() => App.setState({ tab: 'play', screen: 'practice', songId: 'frere', inst: 'drum', line: 0, loop: true, tempo: 126, mode: 'notes' }));
+await page.click('[data-act="playLine"]');
+const lineMs = await page.evaluate(() => App.lineNotes().filter((n) => !n.bar).length * 60000 / 126);
+await page.waitForTimeout(lineMs + 900);
+const looped = await page.evaluate(() => App.state.playing);
+await page.evaluate(() => { App.stop(); App.setState({ loop: false }); });
+
 await browser.close();
 
 // ── Listening, through a fake microphone ─────────────────────────────────
@@ -372,6 +403,11 @@ const captured2 = await withMic(drumWav, async (p) => {
 server.close();
 
 const checks = [
+  ['the uke tab draws a column per note', tabDrum.cells >= 6 && /C4: C string, open/.test(tabDrum.first || '')],
+  ['the uke tab lights the note playing (drum)', tabLit.lit && tabLit.cur >= 0],
+  ['the uke tab lights the note playing (play-along)', tabUke.lit && tabUke.n >= 0],
+  ['the book shows tab and chord boxes', tabBook.tabs > 4 && tabBook.boxes >= 2],
+  ['loop comes round again', looped === true],
   ['MF is on the page', probe.mf === 'object'],
   ['both instruments registered', probe.instruments.join(',') === 'drum,ukulele'],
   ['pad 1 is middle C through the instrument', Math.abs(probe.drumPitch - 261.6256) < 0.01],

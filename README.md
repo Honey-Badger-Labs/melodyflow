@@ -55,6 +55,18 @@ and dropped. The detection is `listen.js` — YIN for a note, a twelve-note
 chroma for a chord, a jump in loudness for when either starts — and the smoke
 test drives all of it end to end through Chromium's fake microphone.
 
+## Ukulele tab
+
+The drum is easy to follow because the number on the screen is the number on
+the pad. **Tab** does the same for the ukulele: four lines, A string on top,
+then E, C, G, and on a line the fret to press (0 = open). Every song gets one —
+on the practice screen (drum and ukulele), lit and scrolled in time with
+playback, and under each line in **Book**, along with a chord box for every
+chord the song uses. Each note goes to its lowest fret; the drum's three
+lowest pads are below a uke's range and are shown an octave up, dotted.
+**⟲ Loop** repeats the current line, and the tempo goes down to 40 bpm for
+slow practice.
+
 ## Playing along on the ukulele
 
 A song can carry a chord line under each lyric line. Open one and switch the
@@ -85,6 +97,7 @@ on the screen and fails the smoke test.
 | `instruments.js` | The instrument model: which tokens exist, what pitches each one sounds, how it is voiced — plus the notation grammar they share. Loaded before the app, imported by the tests. |
 | `fretboard.js` | Where the fingers go, and what it costs to get there from the shape you are already holding. Searches the fretboard from the notes of the chord; holds no chord pictures. |
 | `fretboard-view.js` | Draws a chord box, and the thing chord boxes never show: the finger that is already where it needs to be. Strings in, markup out — no state, no events. |
+| `tab.js` | Ukulele tablature: each drum note placed at its lowest fret on G C E A, drawn as four lines with the A string on top. No DOM state. |
 | `playalong.js` | When every chord, strum and melody note falls, pickups included, for the play-along. No DOM, no audio, no clock — times are in beats. |
 | `listen.js` | The microphone, as numbers: which pad a note is, which chord a strum is, when either starts, and a run of notes as lengths in beats. No DOM, no audio graph — the tests feed it tones they make up. |
 | `songbook.js` | Your songs: saved as text in the book's own notation, merged over the built-ins, and written to / read from a songbook file. No DOM. |
