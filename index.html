@@ -111,8 +111,8 @@ const BUILTIN=[
     L('Twinkle, twinkle, little star','1 1 5 5 | 6 6 5*2','C*4 | F*2 C*2'),L('How I wonder what you are','4 4 3 3 | 2 2 1*2','F*2 C*2 | G7*2 C*2'),
     L('Up above the world so high','5 5 4 4 | 3 3 2*2','C*2 F*2 | C*2 G7*2'),L('Like a diamond in the sky','5 5 4 4 | 3 3 2*2','C*2 F*2 | C*2 G7*2')]},
   {id:'macdonald',title:'Old MacDonald Had a Farm',cat:'Folk',level:1,bpm:96,meter:'4/4',stars:2,lines:[
-    L('Old MacDonald had a farm','1 1 1 5. | 6. 6. 5.*2'),L('E-I-E-I-O','3 3 2 2 | 1*2'),
-    L('And on that farm he had a cow','1 1 1 5. | 6. 6. 5.*2'),L('E-I-E-I-O','3 3 2 2 | 1*2')]},
+    L('Old MacDonald had a farm','1 1 1 5. | 6. 6. 5.*2','C*4 | F*2 C*2'),L('E-I-E-I-O','3 3 2 2 | 1*2','C*2 G7*2 | C*2'),
+    L('And on that farm he had a cow','1 1 1 5. | 6. 6. 5.*2','C*4 | F*2 C*2'),L('E-I-E-I-O','3 3 2 2 | 1*2','C*2 G7*2 | C*2')]},
   {id:'frere',title:'Frère Jacques',cat:'Round',level:1,bpm:100,meter:'4/4',stars:3,lines:[
     L('Frère Jacques','1 2 3 1','C*4'),L('Frère Jacques','1 2 3 1','C*4'),L('Dormez-vous?','3 4 5*2','C*4'),
     L('Sonnez les matines','5*.5 6*.5 5*.5 4*.5 3 1','C*4'),L('Ding, ding, dong','1 5. 1*2','C G7 C*2')]},
@@ -124,20 +124,20 @@ const BUILTIN=[
     L('Jingle bells, jingle bells','3 3 3*2 | 3 3 3*2','C*4 | C*4'),L('Jingle all the way','3 5 1 2 | 3*4','C*4 | C*4'),
     L('Oh what fun it is to ride','4 4 4 4 | 4 3 3 3*.5 3*.5','F*4 | C*4'),L('In a one-horse open sleigh','3 2 2 3 | 2*2 5*2','G7*4 | G7*4')]},
   {id:'saints',title:'When the Saints Go Marching In',cat:'Gospel',level:2,bpm:104,meter:'4/4',stars:2,lines:[
-    L('Oh when the saints','1 3 4 5*2'),L('go marching in','1 3 4 5*2'),L('Oh when the saints go marching in','5 5 4 3 | 3 2 1'),L('Oh how I want to be in that number','3 3 2 1 | 1*2 5*2')]},
+    L('Oh when the saints','1 3 4 5*2','C*5'),L('go marching in','1 3 4 5*2','C*5'),L('Oh when the saints go marching in','5 5 4 3 | 3 2 1','C*4 | C G7 C'),L('Oh how I want to be in that number','3 3 2 1 | 1*2 5*2','C*2 C7*2 | F*2 C*2')]},
   {id:'scarborough',title:'Scarborough Fair',cat:'Dorian folk',level:2,bpm:76,meter:'3/4',stars:1,lines:[
-    L('Are you going','2 2 2*2'),L('to Scarborough Fair','6 6 5 | 2*3'),L('Parsley, sage','4 3 2 | 1*3')]},
+    L('Are you going','2 2 2*2','Dm*4'),L('to Scarborough Fair','6 6 5 | 2*3','Dm*2 C | Dm*3'),L('Parsley, sage','4 3 2 | 1*3','F*3 | C*3')]},
   {id:'amazing',title:'Amazing Grace',cat:'Hymn',level:2,bpm:72,meter:'3/4',stars:2,flag:'adapted',lines:[
-    L('Amazing grace','5. 1*2 3*.5 1*.5 | 3*3'),L('how sweet the sound','2*3 | 1*2 5.'),L('that saved a wretch like me','5. 1*2 3*.5 1*.5 | 3*3')]},
+    L('Amazing grace','5. 1*2 3*.5 1*.5 | 3*3','C*4 | C*3'),L('how sweet the sound','2*3 | 1*2 5.','G7*3 | C*3'),L('that saved a wretch like me','5. 1*2 3*.5 1*.5 | 3*3','C*4 | C*3')]},
   // From the notebook, in A minor: E A C B A E' D' B. The answer lands on G
   // where the film has G sharp, which this drum does not have.
-  {id:'hedwig',title:"Hedwig's Theme",cat:'Film · notebook',level:3,bpm:88,meter:'3/4',pickup:1,stars:1,flag:'adapted',lines:[
-    L('Opening','3 | 6*1.5 .1*.5 7 | 6*2 .3 | .2*3 | 7*2'),L('Answer','3 | 6*1.5 .1*.5 7 | 6*2 5 | 3*3')]},
+  {id:'hedwig',title:"Hedwig's Theme",cat:'Film · notebook',level:3,bpm:88,meter:'3/4',pickup:1,stars:1,flag:'adapted',chordsGuess:true,lines:[
+    L('Opening','3 | 6*1.5 .1*.5 7 | 6*2 .3 | .2*3 | 7*2','0 | Am*3 | Am*3 | Dm*3 | E7*2'),L('Answer','3 | 6*1.5 .1*.5 7 | 6*2 5 | 3*3','0 | Am*3 | Am*2 G | Am*3')]},
   // The melody as the notebook has it; the rhythm is still a guess.
-  {id:'terminator',title:'Terminator theme',cat:'Film · notebook',level:3,bpm:76,meter:'4/4',stars:0,flag:'timing',lines:[
-    L('The figure','6 7 .1*2 | 7 5 1*2'),L('Up high','6 7 .1*2 | 7 5 .3 .2'),L('Home','6 7 .1*2 | 7 5 1*2')]},
-  {id:'lowrider',title:'Low Rider',cat:'Funk · notebook',level:3,bpm:92,meter:'4/4',stars:0,flag:'timing',lines:[
-    L('The hook','7 7 7 7 7 .1 .2 | 5 7 .1 7 5'),L('Again','7 7 7 7 7 .1 .2 | 5 7 .1 7 5'),L('Down on 4','4 4 4 4 4 | 4 4 4 4 4 | 4 5')]},
+  {id:'terminator',title:'Terminator theme',cat:'Film · notebook',level:3,bpm:76,meter:'4/4',stars:0,flag:'timing',chordsGuess:true,lines:[
+    L('The figure','6 7 .1*2 | 7 5 1*2','Am*4 | G*2 Am*2'),L('Up high','6 7 .1*2 | 7 5 .3 .2','Am*4 | G*4'),L('Home','6 7 .1*2 | 7 5 1*2','Am*4 | G*2 Am*2')]},
+  {id:'lowrider',title:'Low Rider',cat:'Funk · notebook',level:3,bpm:92,meter:'4/4',stars:0,flag:'timing',chordsGuess:true,lines:[
+    L('The hook','7 7 7 7 7 .1 .2 | 5 7 .1 7 5','G*12'),L('Again','7 7 7 7 7 .1 .2 | 5 7 .1 7 5','G*12'),L('Down on 4','4 4 4 4 4 | 4 4 4 4 4 | 4 5','F*10 G*2')]},
   // Public domain. The one F above the top pad, on "heav-en-ly", is played as
   // E: this drum stops at E5 — the notebook boxes that note for the same reason.
   {id:'silent',title:'Silent Night (Stille Nag)',cat:'Christmas · notebook',level:2,bpm:66,meter:'3/4',stars:0,flag:'adapted',lines:[
@@ -157,10 +157,10 @@ const BUILTIN=[
     L('Up to 6 again','1 2 3 | 4*3 6*2','C*3 | F*5'),
     L('Down home','6 5 4 | 3*3 1*2','F*3 | C*5'),
     L('Last line','1 2 3 | 4*2 2 2 | 3*2 1*4','C*3 | G7*4 | C*6')]},
-  {id:'cant',title:"Can't Help Falling in Love",cat:'Ballad · notebook',level:3,bpm:68,meter:'4/4',stars:1,flag:'timing',lines:[
-    L('Wise men say','1 3 5 .1*2'),L('only fools rush in','7 5 6 5*2')]},
-  {id:'homealone',title:'Somewhere in My Memory',cat:'Film · notebook',level:3,bpm:80,meter:'3/4',stars:0,flag:'timing',lines:[
-    L('Opening','5 .1*2 | 7 .1 5'),L('Answer','6 5*2 | 3*3')]}
+  {id:'cant',title:"Can't Help Falling in Love",cat:'Ballad · notebook',level:3,bpm:68,meter:'4/4',stars:1,flag:'timing',chordsGuess:true,lines:[
+    L('Wise men say','1 3 5 .1*2','C*3 Am*2'),L('only fools rush in','7 5 6 5*2','Em*2 F G*2')]},
+  {id:'homealone',title:'Somewhere in My Memory',cat:'Film · notebook',level:3,bpm:80,meter:'3/4',stars:0,flag:'timing',chordsGuess:true,lines:[
+    L('Opening','5 .1*2 | 7 .1 5','C*3 | G C*2'),L('Answer','6 5*2 | 3*3','F G*2 | C*3')]}
 ];
 /* The book as shown: the built-ins, your corrections in their place, then
    the songs that are only yours. Rebuilt by App.refreshSongs(). */
@@ -248,7 +248,7 @@ const App = {
   refreshSongs(){
     const hydrate=x=>Object.assign({},x,{stars:x.stars||0,lines:x.lines.map(l=>L(l.label,l.notes,l.chords))});
     SONGS=MF_SONGBOOK.merge(BUILTIN,this.saved||[]).map(e=>
-      e.edited? Object.assign(hydrate(e.song),{edited:true,stars:e.original.stars,flag:e.original.flag})
+      e.edited? Object.assign(hydrate(e.song),{edited:true,stars:e.original.stars,flag:e.original.flag,chordsGuess:e.original.chordsGuess})
       : e.custom? Object.assign(hydrate(e.song),{custom:true})
       : e.song);
     this._plan=null;
@@ -771,11 +771,11 @@ const App = {
 
   screenLibrary(){
     const st=this.state, s=this.song();
-    const filters=[['all','All'],['uke','Ukulele'],['mine','Mine'],['fix','Needs fixing'],['l1','Level 1'],['l2','Level 2'],['christmas','Christmas'],['film','Film']];
+    const filters=[['all','All'],['uke','Chords'],['mine','Mine'],['fix','Needs fixing'],['l1','Level 1'],['l2','Level 2'],['christmas','Christmas'],['film','Film']];
     const rows=SONGS.filter(x=> st.filter==='all'?true
         : st.filter==='uke'?this.hasUke(x)
         : st.filter==='mine'?!!(x.custom||x.edited)
-        : st.filter==='fix'?!!x.flag
+        : st.filter==='fix'?!!(x.flag||x.chordsGuess)
         : st.filter==='l1'?x.level===1
         : st.filter==='l2'?x.level===2
         : x.cat.toLowerCase().indexOf(st.filter)>=0);
@@ -811,15 +811,15 @@ const App = {
           const stars='★★★☆☆☆'.slice(3-x.stars,6-x.stars);
           const tag=(t,bc,fg)=>`<span style="flex:none;font:600 8.5px ui-monospace,Menlo,monospace;letter-spacing:.12em;text-transform:uppercase;padding:3px 6px;border-radius:var(--radius-sm);border:1px solid ${bc};color:${fg}">${t}</span>`;
           const flag=(x.flag?tag(x.flag,x.flag==='timing'?'#7a6a4a':'#5d5294',x.flag==='timing'?'#e0c79a':'#d2cefd'):'')
-            +(this.hasUke(x)?tag('uke','#4d7a68','#8fd0b4'):'')+MF_TAB.badges(x)
+            +(this.hasUke(x)?(x.chordsGuess?tag('Chords · guess','#7a6a4a','#e0c79a'):tag('Chords','#4d7a68','#8fd0b4')):'')+MF_TAB.badges(x)
             +(x.custom?tag('mine','#595d6c','#b2b6ca'):x.edited?tag('edited','#595d6c','#b2b6ca'):'');
           return `<button data-act="openSong" data-id="${x.id}" style="width:100%;display:flex;align-items:center;gap:11px;text-align:left;padding:11px 12px;border-radius:var(--radius-md);border:1px solid var(--color-neutral-900);background:var(--color-surface);color:inherit;cursor:pointer">
             <div style="flex:none;width:34px;height:34px;border-radius:var(--radius-sm);display:grid;place-items:center;background:var(--color-bg);border:1px solid var(--color-neutral-800);font:600 11px ui-monospace,Menlo,monospace;color:var(--color-accent-300)">${x.lines.length}</div>
             <div style="flex:1;min-width:0">
               <div style="font:500 13.5px/1.25 Inter,sans-serif;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(x.title)}</div>
               <div style="font:400 11px Inter,sans-serif;color:var(--color-neutral-600);margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(x.cat)} · ${x.bpm} bpm · ${x.lines.length} lines</div>
+              <div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:6px">${flag}</div>
             </div>
-            ${flag}
             <span style="flex:none;font:400 11px Inter,sans-serif;letter-spacing:1.5px;color:var(--color-neutral-700)">${stars}</span>
           </button>`;
         }).join('')}
@@ -936,7 +936,7 @@ const App = {
     const restore=s.edited?`<button data-act="restoreSong" style="border:0;background:none;color:var(--color-neutral-600);font:500 11px Inter,sans-serif;cursor:pointer;padding:6px 2px 0">Edited · restore the original</button>`:'';
     const bdg=`<div style="display:flex;gap:5px;justify-content:center;flex-wrap:wrap;margin-top:8px">${MF_TAB.badges(s)}</div>`;
     if(!this.hasUke(s)) return bdg+(restore?`<div style="text-align:center">${restore}</div>`:'');
-    return bdg+`<div style="display:flex;gap:5px;margin-top:11px;padding:3px;border-radius:var(--radius-md);background:#292b31;border:1px solid var(--color-neutral-800)">${
+    return bdg+this.guessNote(s,'center')+`<div style="display:flex;gap:5px;margin-top:11px;padding:3px;border-radius:var(--radius-md);background:#292b31;border:1px solid var(--color-neutral-800)">${
       this.seg([['drum','Tongue drum',30,12],['ukulele','Ukulele',30,12]],st.inst==='ukulele'?'ukulele':'drum','playInst')}</div>${restore?`<div style="text-align:center">${restore}</div>`:''}`;
   },
 
@@ -1294,6 +1294,12 @@ const App = {
     </div>`;
   },
 
+  /* Chords worked out by ear for a notebook fragment, not taken from a
+     score: said wherever the chords are shown, so nobody learns them as gospel. */
+  guessNote(x,align){
+    if(!x||!x.chordsGuess||!this.hasUke(x)) return '';
+    return `<div style="font:400 10.5px/1.4 Inter,sans-serif;color:#e0c79a;margin-top:6px;text-align:${align||'left'}">Chords are a best guess, not checked against a score.</div>`;
+  },
   /* Every chord a song uses, as the chart shape, side by side. */
   chordBoxes(x){
     if(!this.hasUke(x)) return '';
@@ -1301,7 +1307,7 @@ const App = {
     const names=[...new Set(x.lines.flatMap(l=>(l.chords||[]).filter(e=>!e.bar&&!e.rest).map(e=>e.tok)))];
     const boxes=names.map(n=>{ const sh=uke.shapesFor(n)[0]; return sh?`<div data-act="hearChord" data-v="${esc(n)}" style="width:76px;cursor:pointer">${MF_FRETBOARD_VIEW.chord(sh,{label:n})}</div>`:''; }).join('');
     return `<div style="margin-top:10px;font:600 9.5px ui-monospace,Menlo,monospace;letter-spacing:.18em;text-transform:uppercase;color:var(--color-neutral-500)">Chords in this song</div>
-      <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:6px">${boxes}</div>`;
+      <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:6px">${boxes}</div>${this.guessNote(x)}`;
   },
   screenBook(){
     const st=this.state;
@@ -1309,7 +1315,7 @@ const App = {
     let body='';
     if(st.book==='score'){
       body=`<div style="display:flex;flex-direction:column;gap:12px;margin-top:15px">
-        ${SONGS.slice(0,4).map(x=>`<div style="padding:14px;border-radius:var(--radius-lg);border:1px solid var(--color-neutral-900);background:var(--color-surface)">
+        ${SONGS.map(x=>`<div style="padding:14px;border-radius:var(--radius-lg);border:1px solid var(--color-neutral-900);background:var(--color-surface)">
           <div style="display:flex;align-items:baseline;justify-content:space-between;gap:10px">
             <div style="font:500 15px Inter,sans-serif">${esc(x.title)}</div>
             <button data-act="scoreEdit" data-id="${x.id}" style="border:0;background:none;color:var(--color-accent-400);font:500 11.5px Inter,sans-serif;cursor:pointer;flex:none">edit</button>
