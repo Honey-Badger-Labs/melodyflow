@@ -178,6 +178,11 @@ const book = await page.evaluate(() => ({
   // Every chord line in the book adds up to its melody line.
   drift: SONGS.filter((x) => App.hasUke(x)).flatMap((x) => MF_PLAYALONG.plan(x).problems.map((q) => x.id + ':' + q.li)),
   withChords: SONGS.filter((x) => App.hasUke(x)).length,
+  songs: SONGS.length,
+  // Best-guess chords say so in the list; the rest are tagged plainly.
+  guessTags: [...document.querySelectorAll('[data-act="openSong"]')].filter((b) => b.textContent.includes('Chords · guess')).length,
+  guessed: SONGS.filter((x) => x.chordsGuess).length,
+  oldTag: [...document.querySelectorAll('[data-act="openSong"] span')].some((t) => t.textContent.trim().toLowerCase() === 'uke'),
 }));
 await page.click('[data-act="filter"][data-v="uke"]');
 await page.waitForTimeout(150);
@@ -438,6 +443,9 @@ const checks = [
   ['Happy Birthday is first in the book', book.first === 'birthday'],
   ['every chord line adds up to its melody', book.drift.length === 0],
   ['the ukulele filter lists the songs with chords', ukeRows === book.withChords && ukeRows >= 5],
+  ['every song in the book has chords', book.withChords === book.songs],
+  ['best-guess chords are marked as a guess', book.guessed >= 1 && book.guessTags === book.guessed],
+  ['the old uke tag is gone', !book.oldTag],
   ['the play-along draws now and next', uke.diagrams === 2],
   ['the line shows its chords', uke.chips],
   ['a 3/4 bar is six strum slots', uke.slots === 6],

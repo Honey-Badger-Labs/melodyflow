@@ -21,7 +21,7 @@ arrangement editable.
 
 | Tab | What it does |
 |---|---|
-| **Play** | The songbook (library) → a practice screen: next note huge, the whole line as a scrolling ribbon with a moving beat marker, and the pad lit on the drum. Three modes — **Notes only** (steady even pulse), **With rhythm** (real durations), and **On your own** (guided practice: nothing auto-plays — the next note lights up and you advance by tapping the correct pad yourself; *Listen* still plays it for you). Tempo, previous/next line. Songs with chords (tagged **uke**, and a *Ukulele* filter) switch to the ukulele play-along — see below. |
+| **Play** | The songbook (library) → a practice screen: next note huge, the whole line as a scrolling ribbon with a moving beat marker, and the pad lit on the drum. Three modes — **Notes only** (steady even pulse), **With rhythm** (real durations), and **On your own** (guided practice: nothing auto-plays — the next note lights up and you advance by tapping the correct pad yourself; *Listen* still plays it for you). Tempo, previous/next line. Songs with chords (tagged **Chords**, and a *Chords* filter; every song has them now) switch to the ukulele play-along — see below. |
 | **Drum** | The virtual drum — Free play, Improvise (drone + pentatonic lifted forward), and Layout. Rotate the wheel; tap any pad to hear it. |
 | **Capture** | Play, hum or whistle a phrase into the phone's microphone → the notes, their lengths and the tempo, as a draft that lands in the editor and can be saved to the book. |
 | **Book** | Every arrangement written out with its chords, **Your songs** (what you have written or corrected, and a saved copy of the whole book), and the decision register (in / adapted / corrected / out / queued, each with its reason). |
@@ -83,9 +83,16 @@ practice screen from *Tongue drum* to *Ukulele*:
   **Listen** strums it for you. **On your own** waits: make the shape, strum it,
   tap it, and it moves to the next change.
 
-Chords are in: Happy Birthday, You Are My Sunshine, Silent Night, Twinkle
-Twinkle, Frère Jacques (one chord — the place to start), Ode to Joy and Jingle
-Bells. The timing is worked out in
+Every song has chords. Frère Jacques is one chord, the place to start; the
+folk songs and hymns use C, F, G7 and C7 (Scarborough Fair: Dm, C, F).
+The five notebook fragments (Hedwig's Theme, Terminator, Low Rider, Can't Help
+Falling in Love, Somewhere in My Memory) have **best-guess chords**, worked
+out from the notes rather than a score. They carry `chordsGuess: true`, show a
+**Chords · guess** tag in the list, sit under *Needs fixing*, and say so
+under their chord boxes and on the play-along. The *works on* badges are
+unchanged: a song that is not ideal on the uke still has its chords and tab,
+with the badge. **Book → Arrangements** now lists every song, not the first
+four. The timing is worked out in
 `playalong.js`; a chord line that does not add up to its melody line is reported
 on the screen and fails the smoke test.
 
