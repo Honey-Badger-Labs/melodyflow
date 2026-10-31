@@ -232,3 +232,12 @@ song and nothing else is removed.
   from the notebook. The register says what changed and why.
 - Terminator, Low Rider, Can't Help Falling in Love and Somewhere in My Memory are
   flagged `timing`: the notes are right, the rhythm is a placeholder.
+
+## Learn mode
+
+Tap **♪ Learn** to get a landscape lesson on reading music. A treble staff shows each note with its letter name underneath (you can turn the names off once you know them). Under the staff is the instrument you picked: a two-octave **piano keyboard** (your computer keys A–; play it too), the tongue drum pads, or the ukulele fretboard. The current note lights up on both the staff and the instrument.
+
+- **Watch:** the tune plays and the highlight follows it, at a tempo you choose.
+- **Step — you play:** the lesson waits until you play the right note.
+
+There are four lessons: the C major scale, Mary Had a Little Lamb, Ode to Joy and Twinkle Twinkle. It all works offline. Screenshots are in `docs/screenshots/learn-*.png`.
