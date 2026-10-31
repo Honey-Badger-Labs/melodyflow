@@ -206,6 +206,7 @@
     s += `<text x="14" y="${y(2) + 22}" font-size="64" fill="${INK}" font-family="serif">𝄞</text>`;
     lesson.notes.forEach(([n, d], k) => {
       const st = staffStep(n), x = 90 + k * 56, on = k === cur;
+      if (on) s += `<rect data-learn-cursor x="${x - 22}" y="6" width="44" height="158" rx="8" fill="${ACC}" fill-opacity="0.16" stroke="${ACC}" stroke-opacity="0.6"/>`;
       const col = on ? ACC : INK;
       for (const L of ledgerLines(st)) s += `<line x1="${x - 13}" x2="${x + 13}" y1="${y(L)}" y2="${y(L)}" stroke="${col}" stroke-width="1.4"/>`;
       const hollow = d >= 2;
@@ -269,7 +270,7 @@
     const L = LESSONS[S.lesson], cur = S.i, note = cur >= 0 ? L.notes[cur][0] : L.notes[0][0];
     const w = where(note, S.inst);
     const tempo = S.tempo || L.tempo;
-    const btn = (act, v, label, on) => `<button data-l="${act}" data-v="${v}" style="padding:7px 11px;border-radius:8px;border:1px solid ${on ? ACC : '#3a3d47'};background:${on ? '#2b2741' : 'transparent'};color:${on ? '#d2cefd' : INK};font:500 12px Inter,sans-serif;cursor:pointer">${label}</button>`;
+    const btn = (act, v, label, on) => `<button data-l="${act}" data-v="${v}" class="mf-btn" style="border:1px solid ${on ? ACC : '#3a3d47'};background:${on ? '#2b2741' : 'transparent'};color:${on ? '#d2cefd' : INK};cursor:pointer">${label}</button>`;
     let inst = '';
     if (S.inst === 'piano') inst = pianoSvg(cur >= 0 && w ? w.midi : null);
     else if (S.inst === 'drum') inst = drumSvg(cur >= 0 && w ? w.pad : null);
@@ -277,11 +278,11 @@
     const ok = playableOn(L, S.inst);
     host.innerHTML = `<div data-learn class="mf-learn" style="padding:10px 16px;display:flex;flex-direction:column;gap:10px">
       <div class="mf-learn-turn" style="display:none;padding:8px 12px;border-radius:8px;background:#2b2741;color:#d2cefd;font:500 12px Inter,sans-serif">Turn your phone sideways — Learn mode is laid out in landscape.</div>
-      <div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center">
+      <div class="mf-row mf-learn-lessons">
         <span style="font:500 20px var(--font-heading,serif);margin-right:8px">Learn</span>
         ${LESSONS.map((x, k) => btn('lesson', k, esc(x.title), k === S.lesson)).join('')}
       </div>
-      <div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center">
+      <div class="mf-row mf-learn-controls">
         ${btn('inst', 'piano', 'Piano', S.inst === 'piano')}${btn('inst', 'drum', 'Tongue drum', S.inst === 'drum')}${btn('inst', 'ukulele', 'Ukulele', S.inst === 'ukulele')}
         <span style="width:12px"></span>
         ${btn('mode', 'watch', 'Watch', S.mode === 'watch')}${btn('mode', 'step', 'Step — you play', S.mode === 'step')}
@@ -289,11 +290,19 @@
         ${S.mode === 'watch' ? `<label style="font:400 12px Inter,sans-serif;color:${DIM}">Tempo <input data-l="tempo" type="range" min="40" max="140" value="${tempo}"> ${tempo}</label>` : ''}
         ${btn('go', '', S.playing ? 'Stop' : (S.mode === 'watch' ? 'Play' : 'Start'), S.playing)}
       </div>
-      <div style="font:400 12.5px/1.5 Inter,sans-serif;color:#a2a4b0">${esc(L.tip)} <span style="color:${DIM}">Lines, bottom to top: E G B D F (“Every Good Boy Does Fine”). Spaces: F A C E.</span></div>
-      <div class="mf-learn-stage"><div style="overflow-x:auto;background:#17181c;border-radius:10px;padding:6px">${staffSvg(L, cur, S.names)}</div>
+      <div class="mf-learn-tip" style="font:400 12.5px/1.5 Inter,sans-serif;color:#a2a4b0">${esc(L.tip)} <span style="color:${DIM}">Lines, bottom to top: E G B D F (“Every Good Boy Does Fine”). Spaces: F A C E.</span></div>
+      <div class="mf-learn-stage"><div class="mf-learn-staff" data-learn-staff-wrap style="overflow-x:auto;background:#17181c;border-radius:10px;padding:6px">${staffSvg(L, cur, S.names)}</div>
       <div data-learn-now style="font:600 15px Inter,sans-serif;color:${ACC};min-height:20px">${cur >= 0 ? `${esc(note.replace(/\d/, ''))} — ${w ? esc(w.text) + (w.finger ? `, finger ${w.finger}` : '') : 'not on this instrument'}` : (ok ? 'Press ' + (S.mode === 'watch' ? 'Play' : 'Start') + ' to begin.' : 'Some notes in this lesson are outside this instrument.')}${S.msg ? ` <span style="color:#e59">${esc(S.msg)}</span>` : ''}</div>
-      <div style="background:#17181c;border-radius:10px;padding:10px">${inst}</div></div>
+      <div class="mf-learn-inst" style="background:#17181c;border-radius:10px;padding:10px">${inst}</div></div>
     </div>`;
+    follow();
+  }
+
+  function follow() {
+    const wrap = host && host.querySelector('[data-learn-staff-wrap]'), c = host && host.querySelector('[data-learn-cursor]');
+    if (!wrap || !c || !c.getBoundingClientRect) return;
+    const wr = wrap.getBoundingClientRect(), cr = c.getBoundingClientRect();
+    if (cr.left < wr.left || cr.right > wr.right) wrap.scrollLeft += cr.left - wr.left - wr.width / 3;
   }
 
   function stop() { clearTimeout(S.timer); S.timer = null; S.playing = false; }
