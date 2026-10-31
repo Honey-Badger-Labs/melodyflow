@@ -17,6 +17,7 @@ const ASSETS = [
   './songbook.js',
   './listen.js',
   './learn.js',
+  './render.js',
   './record.js',
   './manifest.webmanifest',
   './icon.svg',

@@ -129,7 +129,8 @@
         ${btn('inst', 'drum', 'Tongue drum', S.inst === 'drum')}${btn('inst', 'ukulele', 'Ukulele', S.inst === 'ukulele')}
         <label style="font:400 13px Inter,sans-serif;color:${DIM}">Tempo <input data-r="bpm" type="range" min="60" max="140" value="${S.bpm}" ${busy ? 'disabled' : ''}> ${S.bpm} BPM</label>
         ${btn('guide', '', S.guide ? 'Guide melody: on' : 'Guide melody: off', S.guide)}
-        ${btn('go', '', busy ? '■ Stop' : '● Record', busy)}</div>
+        ${btn('go', '', busy ? '■ Stop' : '● Record', busy)}
+        ${root.MF_RENDER ? btn('render', '', '♫ Render ensemble (WAV stems + mix)', false) : ''}</div>
       <div style="font:400 12.5px/1.5 Inter,sans-serif;color:#a2a4b0">🎧 Wear headphones: the click and guide play in your ears and are never written to the take, but open speakers would leak into the mic. 2-bar count-in (8 clicks), then play along. Dotted-underlined notes are raised an octave to fit the instrument.</div>
       <div class="mf-record-stage">
         <div data-rec-now style="background:#17181c;border-radius:10px;padding:14px;text-align:center;color:${ACC};min-height:110px">
@@ -197,6 +198,26 @@
     setTimeout(() => URL.revokeObjectURL(url), 5000);
   }
 
+  /** The app renders the song itself: piano, tongue drum and ukulele stems at
+      the chosen tempo, plus a stereo mix — all WAV, all sample-aligned. */
+  function renderEnsemble() {
+    S.msg = 'Rendering…'; draw();
+    setTimeout(() => {
+      const r = root.MF_RENDER.render(SONG, S.bpm);
+      const save = (chs, name) => {
+        const url = URL.createObjectURL(new Blob([encodeWav(chs, r.sampleRate)], { type: 'audio/wav' }));
+        const a = root.document.createElement('a'); a.href = url; a.download = name; a.click();
+        setTimeout(() => URL.revokeObjectURL(url), 10000);
+      };
+      const base = `jingle-bells_${S.bpm}bpm`;
+      save([r.stems.piano], `${base}_piano_stem.wav`);
+      save([r.stems.drum], `${base}_tongue-drum_stem.wav`);
+      save([r.stems.ukulele], `${base}_ukulele_stem.wav`);
+      save(r.mix, `${base}_ensemble_mix.wav`);
+      S.msg = `Rendered ${Math.round(r.seconds)} s: three stems and a mix.`; draw();
+    }, 30);
+  }
+
   function onClick(ev) {
     const t = ev.target.closest('[data-r]'); if (!t || !host.contains(t)) return;
     switch (t.dataset.r) {
@@ -204,6 +225,7 @@
       case 'guide': S.guide = !S.guide; draw(); break;
       case 'go': S.state === 'idle' ? start() : stopRec(); break;
       case 'wav': downloadWav(); break;
+      case 'render': renderEnsemble(); break;
     }
   }
   function onInput(ev) { if (ev.target.dataset && ev.target.dataset.r === 'bpm') { S.bpm = +ev.target.value; draw(); } }
