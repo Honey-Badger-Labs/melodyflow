@@ -46,6 +46,9 @@ button{font-family:inherit}
 nav#tabbar{flex:none;display:flex;padding:8px 10px calc(10px + env(safe-area-inset-bottom));
   border-top:1px solid var(--color-neutral-900);background:rgba(22,24,38,.94);backdrop-filter:blur(8px)}
 input[type=range]{accent-color:var(--color-accent);background:transparent}
+@media (orientation:portrait) and (max-width:700px){.mf-learn-turn{display:block!important}}
+#phone:has(.mf-learn){max-width:1180px}
+.mf-learn-stage{display:flex;flex-direction:column;gap:10px}
 </style>
 </head>
 <body>
@@ -63,6 +66,7 @@ input[type=range]{accent-color:var(--color-accent);background:transparent}
 <script src="tab.js"></script>
 <script src="songbook.js"></script>
 <script src="listen.js"></script>
+<script src="learn.js"></script>
 <script>
 "use strict";
 /* ════════════════════════════════════════════════════════════════════════
@@ -1378,7 +1382,7 @@ const App = {
 
   tabbar(){
     const st=this.state;
-    const tabs=[['play','Play','◉'],['drum',st.inst==='ukulele'?'Ukulele':'Drum','◍'],['capture','Capture','◐'],['book','Book','▤']];
+    const tabs=[['play','Play','◉'],['drum',st.inst==='ukulele'?'Ukulele':'Drum','◍'],['capture','Capture','◐'],['book','Book','▤'],['learn','Learn','♪']];
     return tabs.map(t=>`<button data-act="tab" data-v="${t[0]}" style="flex:1;display:flex;flex-direction:column;align-items:center;gap:5px;border:0;background:none;cursor:pointer;padding:4px 0;color:${st.tab===t[0]?'#d2cefd':'#595d6c'}">
       <span style="font-size:16px;line-height:1">${t[2]}</span><span style="font:500 10px Inter,sans-serif">${t[1]}</span></button>`).join('');
   },
@@ -1393,8 +1397,11 @@ const App = {
       case 'capture': html=this.screenCapture(); break;
       case 'editor': html=this.screenEditor(); break;
       case 'book': html=this.screenBook(); break;
+      case 'learn': html='<div id="learn-host"></div>'; break;
     }
+    if(st.screen!=='learn'&&window.MF_LEARN) MF_LEARN.unmount();
     document.getElementById('scroll').innerHTML=html;
+    if(st.screen==='learn'&&window.MF_LEARN) MF_LEARN.mount(document.getElementById('learn-host'));
     document.getElementById('tabbar').innerHTML=this.tabbar();
     const tb=document.getElementById('mf-tab'), now=tb&&tb.querySelector('[data-tab-now]');
     if(tb){ tb.style.scrollBehavior='auto'; tb.scrollLeft=this._tabX||0;
