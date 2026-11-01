@@ -56,17 +56,26 @@ const server = http.createServer((req, res) => {
 await new Promise((r) => server.listen(0, r));
 const url = `http://127.0.0.1:${server.address().port}/`;
 
-const launch = async () => {
+const launch = async (opts = {}) => {
   try {
-    return await chromium.launch();
+    return await chromium.launch(opts);
   } catch {
     // No downloaded build; a locally installed Chrome will do.
-    return chromium.launch({ channel: 'chrome' });
+    return chromium.launch({ ...opts, channel: 'chrome' });
+  }
+};
+// Skip the first-launch instrument picker and open the song screen's extra
+// controls, once per fresh browser (a reload keeps what the app saved).
+const firstRun = () => {
+  if (!localStorage.getItem('melodyflow-inst-picked')) {
+    localStorage.setItem('melodyflow-inst-picked', '1');
+    localStorage.setItem('melodyflow', JSON.stringify({ more: true }));
   }
 };
 
 const browser = await launch();
 const page = await browser.newPage();
+await page.addInitScript(firstRun);
 // The app works offline, so its test must too: the web font is the one thing
 // it fetches from elsewhere, and a missing font is not a broken page.
 await page.route('https://fonts.googleapis.com/**', (r) => r.fulfill({ status: 200, contentType: 'text/css', body: '' }));
@@ -180,7 +189,7 @@ const book = await page.evaluate(() => ({
   withChords: SONGS.filter((x) => App.hasUke(x)).length,
   songs: SONGS.length,
   // Best-guess chords say so in the list; the rest are tagged plainly.
-  guessTags: [...document.querySelectorAll('[data-act="openSong"]')].filter((b) => b.textContent.includes('Chords · guess')).length,
+  guessTags: SONGS.filter((x) => MF_UX.badge(x, 'ukulele', (y) => App.hasUke(y)) === 'Chords · guess').length,
   guessed: SONGS.filter((x) => x.chordsGuess).length,
   oldTag: [...document.querySelectorAll('[data-act="openSong"] span')].some((t) => t.textContent.trim().toLowerCase() === 'uke'),
 }));
@@ -260,6 +269,8 @@ await page.waitForTimeout(200);
 const captured = await page.evaluate(() => ({ screen: App.state.screen, song: App.song().title, custom: !!App.song().custom }));
 
 // ── A copy of the book, out and back in ───────────────────────────────────
+await page.click('[data-act="tab"][data-v="me"]');
+await page.waitForTimeout(150);
 await page.click('[data-act="tab"][data-v="book"]');
 await page.waitForTimeout(150);
 await page.click('[data-act="book"][data-v="mine"]');
@@ -357,8 +368,9 @@ const ukeWav = wav('uke', [
 ], 4);
 
 async function withMic(file, fn) {
-  const b = await chromium.launch({ args: ['--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream', `--use-file-for-fake-audio-capture=${file}`, '--autoplay-policy=no-user-gesture-required'] });
+  const b = await launch({ args: ['--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream', `--use-file-for-fake-audio-capture=${file}`, '--autoplay-policy=no-user-gesture-required'] });
   const p = await b.newPage();
+  await p.addInitScript(firstRun);
   await p.route('https://fonts.googleapis.com/**', (r) => r.fulfill({ status: 200, contentType: 'text/css', body: '' }));
   p.on('pageerror', (e) => errors.push('mic page: ' + String(e)));
   await p.goto(url, { waitUntil: 'load' });
@@ -398,6 +410,7 @@ const heardUke = await withMic(ukeWav, async (p) => {
 
 // Capture: record the drum playing, stop, and read the notes back.
 const captured2 = await withMic(drumWav, async (p) => {
+  await p.click('[data-act="tab"][data-v="me"]');
   await p.click('[data-act="tab"][data-v="capture"]');
   await p.click('[data-act="toggleRec"]');
   await until(p, () => (App.state.capCount || 0) >= 7, 8000);
@@ -406,9 +419,46 @@ const captured2 = await withMic(drumWav, async (p) => {
   return p.evaluate(() => ({ info: App.state.capInfo, notes: App.capNotes().map((n) => n.pad), shown: document.getElementById('scroll').textContent.includes('Heard ') }));
 });
 
-server.close();
 
+// ── The simple flow: one list, one mode switch, one big button ───────────
+const simple = await (async () => {
+  const sb = await launch();
+  const p = await sb.newPage({ viewport: { width: 390, height: 844 } });
+  await p.route('https://fonts.googleapis.com/**', (r) => r.fulfill({ status: 200, contentType: 'text/css', body: '' }));
+  p.on('pageerror', (e) => errors.push('simple page: ' + String(e)));
+  await p.goto(url, { waitUntil: 'load' });
+  await p.waitForTimeout(300);
+  const picker = await p.evaluate(() => document.querySelectorAll('[data-act="pickInst"]').length);
+  await p.click('[data-act="pickInst"][data-v="ukulele"]');
+  const remembered = await p.evaluate(() => JSON.parse(localStorage.getItem('melodyflow')).inst);
+  await p.fill('[data-act="search"]', 'jingle');
+  const visible = await p.evaluate(() => [...document.querySelectorAll('[data-song-list] [data-act="openSong"]')].filter((b) => b.style.display !== 'none').map((b) => b.dataset.id));
+  await p.click('[data-act="openSong"][data-id="jingle"]');
+  const primaries = await p.evaluate(() => document.querySelectorAll('.mf-primary').length);
+  await p.click('[data-act="songMode"][data-v="record"]');
+  await p.click('[data-act="primary"]');
+  const rec = await p.evaluate(() => ({ screen: App.state.screen, inst: MF_RECORD._state.inst, back: !!document.querySelector('[data-act="backToSong"]') }));
+  await p.click('[data-act="backToSong"]');
+  await p.evaluate(() => App.setState({ songId: 'ode', line: 0 }));
+  await p.click('[data-act="songMode"][data-v="learn"]');
+  await p.click('[data-act="primary"]');
+  const learn = await p.evaluate(() => ({ screen: App.state.screen, title: document.querySelector('[data-learn] [data-l="lesson"][style*="#2b2741"]')?.textContent || '', inst: document.querySelector('[data-learn] [data-l="inst"][data-v="ukulele"]')?.getAttribute('style').includes('#2b2741') }));
+  await p.setViewportSize({ width: 844, height: 390 });
+  await p.click('[data-act="tab"][data-v="play"]');
+  const rail = await p.evaluate(() => { const n = document.getElementById('tabbar').getBoundingClientRect(); return n.height > n.width && document.getElementById('phone').getBoundingClientRect().width >= 840; });
+  await sb.close();
+  return { picker, remembered, visible, primaries, rec, learn, rail };
+})();
+
+server.close();
 const checks = [
+  ['first launch asks for the instrument', simple.picker === 3],
+  ['the instrument is remembered', simple.remembered === 'ukulele'],
+  ['search narrows the one list', simple.visible.length === 1 && simple.visible[0] === 'jingle'],
+  ['the song screen has one primary button', simple.primaries === 1],
+  ['Record mode opens the recorder on your instrument', simple.rec.screen === 'record' && simple.rec.inst === 'ukulele' && simple.rec.back],
+  ['Learn mode opens the matching lesson on your instrument', simple.learn.screen === 'learn' && /Ode/.test(simple.learn.title) && simple.learn.inst],
+  ['landscape: full width with a left tab rail', simple.rail],
   ['the uke tab draws a column per note', tabDrum.cells >= 6 && /C4: C string, open/.test(tabDrum.first || '')],
   ['the uke tab lights the note playing (drum)', tabLit.lit && tabLit.cur >= 0],
   ['the uke tab lights the note playing (play-along)', tabUke.lit && tabUke.n >= 0],
@@ -420,7 +470,7 @@ const checks = [
   ['pad 1 is middle C through the instrument', Math.abs(probe.drumPitch - 261.6256) < 0.01],
   ['a ukulele chord is four pitches', probe.ukeChord === 4],
   ['the songbook rendered', probe.songs >= 13],
-  ['the tab bar rendered', probe.tabs === 4],
+  ['the tab bar has three tabs', probe.tabs === 3],
   ['a song opens onto the drum', pads === 13],
   ['the fretboard reached the page', probe.fretboard === 'object'],
   ['C is the shape off the chart', JSON.stringify(probe.chartC) === '[0,0,0,3]'],
@@ -429,7 +479,7 @@ const checks = [
   ['anchored fingers are marked', changes.anchorsShown],
   ['the change is named in words', changes.note !== null],
   ['stepping on shows a different change', stepped !== null],
-  ['the tab renames itself', changes.tab.includes('Ukulele')],
+  ['the free-play tab keeps its name', changes.tab.includes('Playfreely')],
   ['the chord browser lists every shape', chords.chips === 19],
   ['the chord browser draws diagrams', chords.diagrams >= 1],
   ['the drill starts with nothing measured', drillBefore],
