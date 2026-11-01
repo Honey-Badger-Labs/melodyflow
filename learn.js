@@ -179,7 +179,7 @@
 
   /* ── the view ────────────────────────────────────────────────────────
      Owns its own state, so the app's re-render can remount it freely. */
-  const S = { lesson: 0, inst: 'piano', mode: 'watch', i: -1, playing: false, tempo: null, names: true, timer: null, msg: '' };
+  const S = { lesson: 0, inst: 'piano', mode: 'watch', i: -1, playing: false, tempo: null, names: true, timer: null, msg: '', help: false };
 
   function esc(s) { return String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]); }
 
@@ -277,7 +277,7 @@
     else inst = ukeSvg(cur >= 0 ? w : null);
     const ok = playableOn(L, S.inst);
     host.innerHTML = `<div data-learn class="mf-learn" style="padding:10px 16px;display:flex;flex-direction:column;gap:10px">
-      <div class="mf-learn-turn" style="display:none;padding:8px 12px;border-radius:8px;background:#2b2741;color:#d2cefd;font:500 12px Inter,sans-serif">Turn your phone sideways — Learn mode is laid out in landscape.</div>
+      <div class="mf-learn-turn" style="display:none;padding:8px 12px;border-radius:8px;background:#2b2741;color:#d2cefd;font:500 13px Inter,sans-serif">Tip: turn sideways for a bigger staff.</div>
       <div class="mf-row mf-learn-lessons">
         <span style="font:500 20px var(--font-heading,serif);margin-right:8px">Learn</span>
         ${LESSONS.map((x, k) => btn('lesson', k, esc(x.title), k === S.lesson)).join('')}
@@ -286,11 +286,11 @@
         ${btn('inst', 'piano', 'Piano', S.inst === 'piano')}${btn('inst', 'drum', 'Tongue drum', S.inst === 'drum')}${btn('inst', 'ukulele', 'Ukulele', S.inst === 'ukulele')}
         <span style="width:12px"></span>
         ${btn('mode', 'watch', 'Watch', S.mode === 'watch')}${btn('mode', 'step', 'Step — you play', S.mode === 'step')}
-        ${btn('names', '', S.names ? 'Hide note names' : 'Show note names', false)}
+        ${btn('names', '', S.names ? 'Hide note names' : 'Show note names', false)}${btn('help', '', '?', S.help)}
         ${S.mode === 'watch' ? `<label style="font:400 12px Inter,sans-serif;color:${DIM}">Tempo <input data-l="tempo" type="range" min="40" max="140" value="${tempo}"> ${tempo}</label>` : ''}
-        ${btn('go', '', S.playing ? 'Stop' : (S.mode === 'watch' ? 'Play' : 'Start'), S.playing)}
       </div>
-      <div class="mf-learn-tip" style="font:400 12.5px/1.5 Inter,sans-serif;color:#a2a4b0">${esc(L.tip)} <span style="color:${DIM}">Lines, bottom to top: E G B D F (“Every Good Boy Does Fine”). Spaces: F A C E.</span></div>
+      <button data-l="go" class="mf-btn mf-learn-go" style="width:100%;min-height:52px;border:0;border-radius:14px;background:${S.playing ? '#423a6a' : ACC};color:${S.playing ? '#f5f4ff' : '#161826'};font:600 17px Inter,sans-serif">${S.playing ? '■ Stop' : (S.mode === 'watch' ? '▶ Play lesson' : '▶ Start lesson')}</button>
+      <div class="mf-learn-tip" style="${S.help ? '' : 'display:none;'}font:400 12.5px/1.5 Inter,sans-serif;color:#a2a4b0">${esc(L.tip)} <span style="color:${DIM}">Lines, bottom to top: E G B D F (“Every Good Boy Does Fine”). Spaces: F A C E.</span></div>
       <div class="mf-learn-stage"><div class="mf-learn-staff" data-learn-staff-wrap style="overflow-x:auto;background:#17181c;border-radius:10px;padding:6px">${staffSvg(L, cur, S.names)}</div>
       <div data-learn-now style="font:600 15px Inter,sans-serif;color:${ACC};min-height:20px">${cur >= 0 ? `${esc(note.replace(/\d/, ''))} — ${w ? esc(w.text) + (w.finger ? `, finger ${w.finger}` : '') : 'not on this instrument'}` : (ok ? 'Press ' + (S.mode === 'watch' ? 'Play' : 'Start') + ' to begin.' : 'Some notes in this lesson are outside this instrument.')}${S.msg ? ` <span style="color:#e59">${esc(S.msg)}</span>` : ''}</div>
       <div class="mf-learn-inst" style="background:#17181c;border-radius:10px;padding:10px">${inst}</div></div>
@@ -336,7 +336,8 @@
     const v = t.dataset.v;
     switch (t.dataset.l) {
       case 'lesson': stop(); S.lesson = +v; S.i = -1; S.tempo = null; break;
-      case 'inst': stop(); S.inst = v; S.i = -1; break;
+      case 'inst': stop(); S.inst = v; S.i = -1; if (api.onInst) api.onInst(v); break;
+      case 'help': S.help = !S.help; break;
       case 'mode': stop(); S.mode = v; S.i = -1; break;
       case 'names': S.names = !S.names; break;
       case 'go':
@@ -356,8 +357,13 @@
   }
 
   let wired = false;
-  function mount(el) {
+  function mount(el, opts) {
     host = el;
+    if (opts) {
+      if (['piano', 'drum', 'ukulele'].includes(opts.inst) && opts.inst !== S.inst) { stop(); S.inst = opts.inst; S.i = -1; }
+      const k = opts.lesson ? LESSONS.findIndex((x) => x.id === opts.lesson) : -1;
+      if (k >= 0 && k !== S.lesson) { stop(); S.lesson = k; S.i = -1; S.tempo = null; }
+    }
     if (!wired && root.document) {
       wired = true;
       root.document.addEventListener('click', (e) => host && host.isConnected && onClick(e));

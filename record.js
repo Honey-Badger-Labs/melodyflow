@@ -86,7 +86,7 @@
   }
 
   // ── view ────────────────────────────────────────────────────────────
-  const S = { inst: 'drum', bpm: 110, guide: true, state: 'idle', i: -1, bar: -1, count: 0, take: null, msg: '' };
+  const S = { inst: 'drum', bpm: 110, guide: true, state: 'idle', i: -1, bar: -1, count: 0, take: null, msg: '', tip: false };
   let host = null, ac = null, rec = null, stream = null, timers = [], raf = 0;
   const ACC = '#a99cf8', DIM = '#75798c', INK = '#e7e6ee';
   const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
@@ -129,9 +129,10 @@
         ${btn('inst', 'drum', 'Tongue drum', S.inst === 'drum')}${btn('inst', 'ukulele', 'Ukulele', S.inst === 'ukulele')}
         <label style="font:400 13px Inter,sans-serif;color:${DIM}">Tempo <input data-r="bpm" type="range" min="60" max="140" value="${S.bpm}" ${busy ? 'disabled' : ''}> ${S.bpm} BPM</label>
         ${btn('guide', '', S.guide ? 'Guide melody: on' : 'Guide melody: off', S.guide)}
-        ${btn('go', '', busy ? '■ Stop' : '● Record', busy)}
+        ${btn('tip', '', '?', S.tip)}
         ${root.MF_RENDER ? btn('render', '', '♫ Render ensemble (WAV stems + mix)', false) : ''}</div>
-      <div style="font:400 12.5px/1.5 Inter,sans-serif;color:#a2a4b0">🎧 Wear headphones: the click and guide play in your ears and are never written to the take, but open speakers would leak into the mic. 2-bar count-in (8 clicks), then play along. Dotted-underlined notes are raised an octave to fit the instrument.</div>
+      <button data-r="go" class="mf-btn" style="width:100%;min-height:56px;border:0;border-radius:14px;background:${busy ? '#423a6a' : ACC};color:${busy ? '#f5f4ff' : '#161826'};font:600 18px Inter,sans-serif">${busy ? '■ Stop' : '● Record'}</button>
+      <div style="${S.tip ? '' : 'display:none;'}font:400 13px/1.5 Inter,sans-serif;color:#a2a4b0">🎧 Wear headphones: the click and guide play in your ears and are never written to the take, but open speakers would leak into the mic. 2-bar count-in (8 clicks), then play along. Dotted-underlined notes are raised an octave to fit the instrument.</div>
       <div class="mf-record-stage">
         <div data-rec-now style="background:#17181c;border-radius:10px;padding:14px;text-align:center;color:${ACC};min-height:110px">
           ${S.state === 'count' ? `<b style="font-size:44px">${S.count}</b><div>count-in</div>` : S.i >= 0 ? `${noteCard(S.i)}${S.inst === 'ukulele' ? `<div style="color:${INK};font-size:20px">Chord: ${SONG.chords[bar] || ''}</div>` : ''}<div style="color:${DIM}">next: ${noteCard(S.i + 1).replace(/font-size:\d+px/, 'font-size:16px')}</div>` : `<span style="color:${DIM}">${esc(S.msg || 'Ready. Press ● Record.')}</span>`}
@@ -221,7 +222,8 @@
   function onClick(ev) {
     const t = ev.target.closest('[data-r]'); if (!t || !host.contains(t)) return;
     switch (t.dataset.r) {
-      case 'inst': if (S.state === 'idle') { S.inst = t.dataset.v; draw(); } break;
+      case 'inst': if (S.state === 'idle') { S.inst = t.dataset.v; if (root.MF_RECORD.onInst) root.MF_RECORD.onInst(S.inst); draw(); } break;
+      case 'tip': S.tip = !S.tip; draw(); break;
       case 'guide': S.guide = !S.guide; draw(); break;
       case 'go': S.state === 'idle' ? start() : stopRec(); break;
       case 'wav': downloadWav(); break;
@@ -231,8 +233,9 @@
   function onInput(ev) { if (ev.target.dataset && ev.target.dataset.r === 'bpm') { S.bpm = +ev.target.value; draw(); } }
 
   let wired = false;
-  function mount(el) {
+  function mount(el, opts) {
     host = el;
+    if (opts && S.state === 'idle' && ['drum', 'ukulele'].includes(opts.inst)) S.inst = opts.inst;
     if (!wired && root.document) { wired = true;
       root.document.addEventListener('click', (e) => host && host.isConnected && onClick(e));
       root.document.addEventListener('change', (e) => host && host.isConnected && onInput(e)); }

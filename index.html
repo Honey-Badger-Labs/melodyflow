@@ -48,6 +48,7 @@ nav#tabbar{flex:none;display:flex;padding:8px 10px calc(10px + env(safe-area-ins
 input[type=range]{accent-color:var(--color-accent);background:transparent}
 @media (orientation:portrait) and (max-width:700px){.mf-learn-turn{display:block!important}}
 #phone:has(.mf-learn),#phone:has(.mf-record){max-width:1180px}
+#phone:has(.mf-pick){max-width:none}
 .mf-learn-stage,.mf-record-stage{display:flex;flex-direction:column;gap:10px}
 .mf-row{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
 .mf-btn{min-height:44px;min-width:44px;padding:8px 14px;border-radius:10px;font:500 14px Inter,sans-serif;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;text-decoration:none}
@@ -74,7 +75,23 @@ input[type=range]{accent-color:var(--color-accent);background:transparent}
   .mf-learn-inst{grid-column:2;grid-row:2;display:flex;align-items:center;justify-content:center}
   .mf-learn-staff svg{height:min(170px,calc(100dvh - 190px))}
   .mf-record-stage{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,2fr);gap:8px}
+  /* the tab bar becomes a slim left rail so the screen keeps its height */
+  #phone{flex-direction:row}
+  nav#tabbar{order:-1;flex-direction:column;justify-content:center;gap:6px;width:calc(84px + env(safe-area-inset-left));
+    padding:8px 4px 8px calc(4px + env(safe-area-inset-left))!important;border-top:0;border-right:1px solid var(--color-neutral-900)}
+  nav#tabbar button{flex:none!important;flex-direction:column!important;gap:3px!important;padding:8px 0!important}
+  #scroll{padding-right:env(safe-area-inset-right)}
+  .mf-song-head{display:grid;grid-template-columns:1fr auto;gap:8px;align-items:center}
 }
+.mf-seg{display:flex;gap:4px;padding:3px;border-radius:12px;background:#292b31;border:1px solid var(--color-neutral-800)}
+.mf-seg button{flex:1;min-height:40px;border:0;border-radius:9px;background:transparent;color:var(--color-neutral-400);font:500 14px Inter,sans-serif;cursor:pointer}
+.mf-seg button[aria-pressed="true"]{background:#3b336b;color:#f5f4ff}
+.mf-primary{width:100%;min-height:56px;border:0;border-radius:14px;background:var(--color-accent);color:#161826;font:600 18px Inter,sans-serif;cursor:pointer}
+.mf-chip{min-height:40px;padding:0 12px;border-radius:999px;border:1px solid var(--color-neutral-800);background:var(--color-surface);color:var(--color-neutral-200);font:500 13px Inter,sans-serif;cursor:pointer;white-space:nowrap}
+.mf-quiet{border:0;background:none;color:var(--color-accent-300);font:500 13px Inter,sans-serif;cursor:pointer;min-height:44px;padding:0 6px}
+.mf-card{width:100%;display:flex;align-items:center;gap:12px;text-align:left;min-height:56px;padding:10px 14px;border-radius:var(--radius-md);border:1px solid var(--color-neutral-900);background:var(--color-surface);color:inherit;cursor:pointer}
+.mf-big-inst{flex:1;min-height:110px;border-radius:16px;border:1px solid var(--color-neutral-800);background:var(--color-surface);color:var(--color-text);font:500 15px Inter,sans-serif;cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px}
+.mf-big-inst[aria-pressed="true"]{border-color:var(--color-accent);background:#2b2741}
 </style>
 </head>
 <body>
@@ -95,6 +112,7 @@ input[type=range]{accent-color:var(--color-accent);background:transparent}
 <script src="learn.js"></script>
 <script src="render.js"></script>
 <script src="record.js"></script>
+<script src="ux.js"></script>
 <script>
 "use strict";
 /* ════════════════════════════════════════════════════════════════════════
@@ -235,7 +253,7 @@ function esc(s){ return String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;',
    ════════════════════════════════════════════════════════════════════════ */
 const App = {
   state:{
-    tab:'play', screen:'library', filter:'all', songId:'twinkle', line:0,
+    tab:'play', screen:'library', filter:'all', songMode:'listen', more:false, q:'', instPicked:true, songId:'twinkle', line:0,
     cur:-1, playing:false, playScope:null, beat:0, lit:null, tempo:84, mode:'guided',
     armed:false, armScope:null, armItems:[], armIdx:0,
     drumMode:'free', drone:false, rec:'idle', hasCap:false, book:'score',
@@ -243,7 +261,7 @@ const App = {
     drillBpm:90, drillKey:null, drillLive:false, drillLast:null,
     edNotes:[], edTitle:'', edSub:'', edCtx:null, sel:0, rot:0,
     ukeSong:'along', strum:'downs', uCi:-1, uT:0, count:0, ukeDone:false,
-    showTab:true, loop:false, uN:-1,
+    showTab:false, loop:false, uN:-1,
     toast:'', bookMsg:'',
     micOn:false, mic:'off', heard:null, capInfo:null,
     tapMsg:'Terminator is really in 13/8. Tap four bars and I will re-bar it.'
@@ -253,7 +271,7 @@ const App = {
   load(){
     try{
       const s=JSON.parse(localStorage.getItem('melodyflow')||'{}');
-      ['songId','line','tempo','rot','mode','drumMode','filter','book','inst','ukeMode','ukeChord','progId','drillBpm','ukeSong','strum'].forEach(k=>{
+      ['songId','line','tempo','rot','mode','songMode','more','drumMode','filter','book','inst','ukeMode','ukeChord','progId','drillBpm','ukeSong','strum'].forEach(k=>{
         if(s[k]!==undefined) this.state[k]=s[k];
       });
       // The decks are kept apart: they are the only thing here a learner would
@@ -262,12 +280,13 @@ const App = {
       // Songs you wrote or corrected. Kept apart again, and for the same reason.
       const saved=JSON.parse(localStorage.getItem('melodyflow-songs')||'[]');
       this.saved=Array.isArray(saved)?saved.map(MF_SONGBOOK.clean).filter(Boolean):[];
+      this.state.instPicked=!!localStorage.getItem('melodyflow-inst-picked');
       this.refreshSongs();
       if(!SONGS.some(x=>x.id===this.state.songId)){ this.state.songId='twinkle'; this.state.line=0; }
     }catch(e){}
   },
   save(){
-    const s=this.state, keep={songId:s.songId,line:s.line,tempo:s.tempo,rot:s.rot,mode:s.mode,drumMode:s.drumMode,filter:s.filter,book:s.book,inst:s.inst,ukeMode:s.ukeMode,ukeChord:s.ukeChord,progId:s.progId,drillBpm:s.drillBpm,ukeSong:s.ukeSong,strum:s.strum};
+    const s=this.state, keep={songMode:s.songMode,more:s.more,songId:s.songId,line:s.line,tempo:s.tempo,rot:s.rot,mode:s.mode,drumMode:s.drumMode,filter:s.filter,book:s.book,inst:s.inst,ukeMode:s.ukeMode,ukeChord:s.ukeChord,progId:s.progId,drillBpm:s.drillBpm,ukeSong:s.ukeSong,strum:s.strum};
     try{ localStorage.setItem('melodyflow',JSON.stringify(keep)); }catch(e){}
     try{ localStorage.setItem('melodyflow-drill',JSON.stringify(this.decks||{})); }catch(e){}
   },
@@ -802,59 +821,89 @@ const App = {
   },
 
   screenLibrary(){
-    const st=this.state, s=this.song();
-    const filters=[['all','All'],['uke','Chords'],['mine','Mine'],['fix','Needs fixing'],['l1','Level 1'],['l2','Level 2'],['christmas','Christmas'],['film','Film']];
-    const rows=SONGS.filter(x=> st.filter==='all'?true
-        : st.filter==='uke'?this.hasUke(x)
-        : st.filter==='mine'?!!(x.custom||x.edited)
-        : st.filter==='fix'?!!(x.flag||x.chordsGuess)
-        : st.filter==='l1'?x.level===1
-        : st.filter==='l2'?x.level===2
-        : x.cat.toLowerCase().indexOf(st.filter)>=0);
+    const st=this.state, s=this.song(), U=MF_UX;
+    const rows=U.filterSongs(SONGS,st.filter,st.q,x=>this.hasUke(x));
+    const inst=U.INSTRUMENTS.find(i=>i[0]===st.inst)||U.INSTRUMENTS[0];
     return `<div style="padding:0 20px">
-      <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:12px">
-        <div>
-          <div style="font:600 9.5px/1 ui-monospace,Menlo,monospace;letter-spacing:.22em;text-transform:uppercase;color:var(--color-neutral-600)">13 notes · C major · G3–E5</div>
-          <div style="font:500 27px/1.1 var(--font-heading);letter-spacing:-.02em;margin-top:7px">Songbook</div>
-        </div>
-        <button data-act="goDrums" style="display:flex;align-items:center;gap:7px;height:34px;padding:0 11px;border-radius:var(--radius-md);border:1px solid var(--color-neutral-800);background:var(--color-surface);color:var(--color-neutral-400);font:500 11.5px Inter,sans-serif;cursor:pointer">
-          <span style="width:7px;height:7px;border-radius:50%;background:var(--color-accent);display:block"></span>My 13
-        </button>
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:12px">
+        <div style="font:500 28px/1.1 var(--font-heading);letter-spacing:-.02em">Songs</div>
+        <button class="mf-chip" data-act="pickInstOpen" aria-label="Instrument: ${inst[1]}">${inst[2]} ${inst[1]}</button>
       </div>
-
-      <button data-act="resume" style="width:100%;text-align:left;margin-top:18px;padding:14px 15px;border-radius:var(--radius-lg);border:1px solid var(--color-accent-800);background:linear-gradient(140deg,#2b2741,#232532);cursor:pointer;color:inherit;display:block">
-        <div style="display:flex;align-items:center;justify-content:space-between;gap:10px">
-          <div style="min-width:0">
-            <div style="font:600 9.5px/1 ui-monospace,Menlo,monospace;letter-spacing:.2em;text-transform:uppercase;color:var(--color-accent-400)">Pick up where you stopped</div>
-            <div style="font:500 17px/1.2 var(--font-heading);margin-top:7px">${esc(s.title)}</div>
-            <div style="font:400 12px Inter,sans-serif;color:var(--color-neutral-500);margin-top:4px">Line ${st.line+1} of ${s.lines.length} · ${esc(s.cat)}</div>
-          </div>
-          <div style="width:44px;height:44px;flex:none;border-radius:50%;border:1px solid var(--color-accent);display:grid;place-items:center;color:var(--color-accent-300);font-size:14px">▶</div>
+      <button data-act="resume" style="width:100%;text-align:left;margin-top:16px;padding:14px 15px;border-radius:var(--radius-lg);border:1px solid var(--color-accent-800);background:linear-gradient(140deg,#2b2741,#232532);cursor:pointer;color:inherit;display:flex;align-items:center;justify-content:space-between;gap:10px">
+        <div style="min-width:0">
+          <div style="font:500 13px Inter,sans-serif;color:var(--color-accent-300)">Continue</div>
+          <div style="font:500 17px/1.2 var(--font-heading);margin-top:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(s.title)}</div>
         </div>
-        <div style="height:3px;border-radius:2px;background:#292b31;margin-top:13px;overflow:hidden"><div style="height:100%;background:var(--color-accent);border-radius:2px;width:${Math.round(((st.line+1)/s.lines.length)*100)}%"></div></div>
+        <div style="width:48px;height:48px;flex:none;border-radius:50%;background:var(--color-accent);display:grid;place-items:center;color:#161826;font-size:16px">▶</div>
       </button>
-
-      <div style="display:flex;gap:7px;margin:18px 0 0;overflow:auto;padding-bottom:3px">
-        ${filters.map(f=>`<button data-act="filter" data-v="${f[0]}" style="flex:none;height:30px;padding:0 12px;border-radius:999px;font:500 11.5px Inter,sans-serif;cursor:pointer;border:1px solid ${st.filter===f[0]?'#5d5294':'#3f424d'};background:${st.filter===f[0]?'#2b2741':'transparent'};color:${st.filter===f[0]?'#e7e5fe':'#75798c'}">${f[1]}</button>`).join('')}
+      <input data-act="search" type="search" placeholder="Search songs" aria-label="Search songs" value="${esc(st.q||'')}" style="width:100%;margin-top:14px;min-height:48px;padding:0 14px;border-radius:var(--radius-md);border:1px solid var(--color-neutral-800);background:#1c1e2a;color:var(--color-text);font:400 15px Inter,sans-serif">
+      <div style="display:flex;gap:7px;margin:12px 0 0;overflow:auto;padding-bottom:3px">
+        ${U.FILTERS.map(f=>`<button data-act="filter" data-v="${f[0]}" aria-pressed="${st.filter===f[0]}" style="flex:none;min-height:40px;padding:0 14px;border-radius:999px;font:500 13px Inter,sans-serif;cursor:pointer;border:1px solid ${st.filter===f[0]?'#5d5294':'#3f424d'};background:${st.filter===f[0]?'#2b2741':'transparent'};color:${st.filter===f[0]?'#d2cefd':'#9397ab'}">${f[1]}</button>`).join('')}
       </div>
-
-      <div style="display:flex;flex-direction:column;gap:7px;margin-top:13px">
+      <div data-song-list style="display:flex;flex-direction:column;gap:7px;margin-top:12px">
         ${rows.map(x=>{
-          const stars='★★★☆☆☆'.slice(3-x.stars,6-x.stars);
-          const tag=(t,bc,fg)=>`<span style="flex:none;font:600 8.5px ui-monospace,Menlo,monospace;letter-spacing:.12em;text-transform:uppercase;padding:3px 6px;border-radius:var(--radius-sm);border:1px solid ${bc};color:${fg}">${t}</span>`;
-          const flag=(x.flag?tag(x.flag,x.flag==='timing'?'#7a6a4a':'#5d5294',x.flag==='timing'?'#e0c79a':'#d2cefd'):'')
-            +(this.hasUke(x)?(x.chordsGuess?tag('Chords · guess','#7a6a4a','#e0c79a'):tag('Chords','#4d7a68','#8fd0b4')):'')+MF_TAB.badges(x)
-            +(x.custom?tag('mine','#595d6c','#b2b6ca'):x.edited?tag('edited','#595d6c','#b2b6ca'):'');
-          return `<button data-act="openSong" data-id="${x.id}" style="width:100%;display:flex;align-items:center;gap:11px;text-align:left;padding:11px 12px;border-radius:var(--radius-md);border:1px solid var(--color-neutral-900);background:var(--color-surface);color:inherit;cursor:pointer">
-            <div style="flex:none;width:34px;height:34px;border-radius:var(--radius-sm);display:grid;place-items:center;background:var(--color-bg);border:1px solid var(--color-neutral-800);font:600 11px ui-monospace,Menlo,monospace;color:var(--color-accent-300)">${x.lines.length}</div>
+          const bd=U.badge(x,st.inst,y=>this.hasUke(y));
+          return `<button class="mf-card" data-act="openSong" data-id="${x.id}" data-search="${esc(U.norm(x.title+' '+x.cat))}">
             <div style="flex:1;min-width:0">
-              <div style="font:500 13.5px/1.25 Inter,sans-serif;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(x.title)}</div>
-              <div style="font:400 11px Inter,sans-serif;color:var(--color-neutral-600);margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(x.cat)} · ${x.bpm} bpm · ${x.lines.length} lines</div>
-              <div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:6px">${flag}</div>
+              <div style="font:500 15px/1.25 Inter,sans-serif;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(x.title)}</div>
+              <div style="font:400 12.5px Inter,sans-serif;color:var(--color-neutral-500);margin-top:3px">${esc(x.custom?'Yours':x.cat)}</div>
             </div>
-            <span style="flex:none;font:400 11px Inter,sans-serif;letter-spacing:1.5px;color:var(--color-neutral-700)">${stars}</span>
+            ${bd?`<span style="flex:none;font:500 11px Inter,sans-serif;padding:3px 8px;border-radius:999px;border:1px solid #7a6a4a;color:#e0c79a">${esc(bd)}</span>`:''}
+            <span style="flex:none;color:var(--color-neutral-600);font-size:18px">›</span>
           </button>`;
-        }).join('')}
+        }).join('')||`<div style="font:400 14px Inter,sans-serif;color:var(--color-neutral-500);padding:12px 2px">No songs match.</div>`}
+      </div>
+      <div style="height:16px"></div>
+    </div>`;
+  },
+
+  /* The song screen's one decision: Listen, Learn or Record — and one big button. */
+  songHead(){
+    const st=this.state, s=this.song(), U=MF_UX;
+    const inst=U.INSTRUMENTS.find(i=>i[0]===st.inst)||U.INSTRUMENTS[0];
+    const pr=U.primary(st.songMode,s,st.playing||st.armed);
+    return `<div class="mf-song-main" style="margin-top:12px;display:flex;flex-direction:column;gap:10px">
+      <div style="display:flex;gap:8px;align-items:center">
+        <div class="mf-seg" style="flex:1" role="group" aria-label="Mode">${U.MODES.map(m=>`<button data-act="songMode" data-v="${m[0]}" aria-pressed="${st.songMode===m[0]}">${m[1]}</button>`).join('')}</div>
+        <button class="mf-chip" data-act="pickInstOpen" aria-label="Instrument: ${inst[1]}">${inst[2]}</button>
+      </div>
+      <button class="mf-primary" data-act="primary">${pr.label}</button>
+    </div>`;
+  },
+  moreToggle(){
+    const on=this.state.more;
+    return `<div style="text-align:center"><button class="mf-quiet" data-act="toggleMore" aria-expanded="${on}">${on?'Fewer controls ▴':'⋯ Line by line, tempo, tab'}</button></div>`;
+  },
+
+  /* First launch (and the instrument chip): three big choices, remembered. */
+  screenPick(){
+    const st=this.state;
+    return `<div class="mf-pick" style="padding:24px 20px;max-width:640px;margin:0 auto">
+      <div style="font:500 26px/1.15 var(--font-heading)">What do you play?</div>
+      <div style="font:400 15px Inter,sans-serif;color:var(--color-neutral-500);margin-top:8px">You can change this any time.</div>
+      <div style="display:flex;gap:10px;margin-top:22px">${MF_UX.INSTRUMENTS.map(i=>`<button class="mf-big-inst" data-act="pickInst" data-v="${i[0]}" aria-pressed="${st.instPicked&&st.inst===i[0]}"><span style="font-size:38px">${i[2]}</span>${i[1]}</button>`).join('')}</div>
+      ${st.instPicked?`<div style="text-align:center;margin-top:14px"><button class="mf-quiet" data-act="pickInstClose">Cancel</button></div>`:''}
+    </div>`;
+  },
+
+  /* Me: your instrument, your songs, and the tools that used to be tabs. */
+  screenMe(){
+    const st=this.state, U=MF_UX, mine=(this.saved||[]).length;
+    const row=(v,t,sub,extra='')=>`<button class="mf-card" data-act="tab" data-v="${v}"${extra}><div style="flex:1;min-width:0"><div style="font:500 15px Inter,sans-serif">${t}</div><div style="font:400 12.5px Inter,sans-serif;color:var(--color-neutral-500);margin-top:3px">${sub}</div></div><span style="color:var(--color-neutral-600);font-size:18px">›</span></button>`;
+    return `<div style="padding:0 20px">
+      <div style="font:500 28px/1.1 var(--font-heading);letter-spacing:-.02em">Me</div>
+      <div style="font:500 13px Inter,sans-serif;color:var(--color-neutral-500);margin-top:18px">My instrument</div>
+      <div style="display:flex;gap:8px;margin-top:8px">${U.INSTRUMENTS.map(i=>`<button class="mf-big-inst" style="min-height:84px" data-act="pickInst" data-v="${i[0]}" aria-pressed="${st.inst===i[0]}"><span style="font-size:28px">${i[2]}</span>${i[1]}</button>`).join('')}</div>
+      <div style="font:500 13px Inter,sans-serif;color:var(--color-neutral-500);margin-top:22px">My music</div>
+      <div style="display:flex;flex-direction:column;gap:7px;margin-top:8px">
+        ${row('book','My songs &amp; backup',mine?mine+' saved · export or import':'Export or import your songbook',' data-book="mine"')}
+        ${row('capture','Add a song by playing it','Capture from the mic')}
+        ${row('record','Record Jingle Bells','With click, guide and ensemble render')}
+      </div>
+      <div style="font:500 13px Inter,sans-serif;color:var(--color-neutral-500);margin-top:22px">More</div>
+      <div style="display:flex;flex-direction:column;gap:7px;margin-top:8px">
+        ${row('learn','Lessons','Read the staff: scale, Mary, Ode to Joy, Twinkle')}
+        ${row('book','The book','Every arrangement, and why it is here')}
       </div>
       <div style="height:16px"></div>
     </div>`;
@@ -898,7 +947,7 @@ const App = {
         </div>
         <button data-act="editThis" style="height:34px;flex:none;padding:0 11px;border-radius:var(--radius-md);border:1px solid var(--color-neutral-800);background:var(--color-surface);color:var(--color-neutral-400);font:500 11.5px Inter,sans-serif;cursor:pointer">Edit</button>
       </div>
-      ${this.practiceInst()}
+      ${this.songHead()}${this.practiceInst()}
 
       <div style="display:flex;align-items:center;gap:16px;margin-top:14px;padding:0 4px">
         <div style="flex:none;display:flex;align-items:flex-start;gap:3px;line-height:.82;color:var(--color-accent-300);font-size:${big?'100px':'78px'}">
@@ -917,11 +966,12 @@ const App = {
         <div style="display:flex;align-items:center;gap:6px;transition:transform .26s cubic-bezier(.22,.9,.3,1);transform:translateX(-${Math.max(0,idxNow-2)*52}px)">${chips}</div>
       </div>
       <div style="height:3px;border-radius:2px;background:#292b31;margin-top:8px;overflow:hidden"><div id="mf-beat" style="height:100%;background:var(--color-accent);border-radius:2px;transition:width .08s linear;width:${Math.round(st.beat*100)}%"></div></div>
-      ${this.tabPanel(notes,st.cur)}
+      ${st.more?this.tabPanel(notes,st.cur):''}
 
       <div style="padding:10px 0">${this.wheel(pads,'min(62vw, 240px)')}</div>
 
       <div style="padding-bottom:8px">
+        ${this.moreToggle()}${this.state.more?`
         <div style="display:flex;gap:5px;padding:3px;border-radius:var(--radius-md);background:#292b31;border:1px solid var(--color-neutral-800)">${this.seg(modes,st.mode,'mode')}</div>
         ${solo?`<div style="font:400 11px/1.5 Inter,sans-serif;color:var(--color-neutral-600);margin-top:8px;text-align:center;text-wrap:pretty">${st.armed?(this._mic?'Play the lit pad on your drum — the app hears it and moves on.':'Tap the lit pad on the drum to move to the next note.'):'Tap “Practise line”, then play it yourself on the drum. “Listen” plays it for you.'}</div>
         ${this.micRow('Turn on the mic and play your real drum — the right note moves you on.')}`:''}
@@ -936,6 +986,7 @@ const App = {
           <button data-act="playLine" style="flex:1.3;height:44px;border-radius:var(--radius-md);border:1px solid var(--color-accent);background:#2b2741;color:var(--color-accent-200);font:500 14px Inter,sans-serif;cursor:pointer">${playLabel}</button>
         </div>
         <button data-act="playSong" style="width:100%;height:40px;margin-top:8px;border-radius:var(--radius-md);border:1px solid var(--color-accent-700);background:${songBtnBg};color:var(--color-accent-300);font:500 13px Inter,sans-serif;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px"><span style="font-size:11px">▶▶</span>${songLabel}</button>
+        `:''}
         <div style="display:flex;justify-content:space-between;align-items:center;margin-top:9px">
           <button data-act="prevLine" style="border:0;background:none;color:var(--color-neutral-600);font:500 12px Inter,sans-serif;cursor:pointer;padding:4px 2px">‹ previous line</button>
           <span style="font:400 11px ui-monospace,Menlo,monospace;color:var(--color-neutral-700)">${st.line+1} / ${s.lines.length}</span>
@@ -967,6 +1018,7 @@ const App = {
     const st=this.state, s=this.song();
     const restore=s.edited?`<button data-act="restoreSong" style="border:0;background:none;color:var(--color-neutral-600);font:500 11px Inter,sans-serif;cursor:pointer;padding:6px 2px 0">Edited · restore the original</button>`:'';
     const bdg=`<div style="display:flex;gap:5px;justify-content:center;flex-wrap:wrap;margin-top:8px">${MF_TAB.badges(s)}</div>`;
+    if(!st.more) return restore?`<div style="text-align:center">${restore}</div>`:'';
     if(!this.hasUke(s)) return bdg+(restore?`<div style="text-align:center">${restore}</div>`:'');
     return bdg+this.guessNote(s,'center')+`<div style="display:flex;gap:5px;margin-top:11px;padding:3px;border-radius:var(--radius-md);background:#292b31;border:1px solid var(--color-neutral-800)">${
       this.seg([['drum','Tongue drum',30,12],['ukulele','Ukulele',30,12]],st.inst==='ukulele'?'ukulele':'drum','playInst')}</div>${restore?`<div style="text-align:center">${restore}</div>`:''}`;
@@ -1029,7 +1081,7 @@ const App = {
         </div>
         <div style="width:34px;flex:none"></div>
       </div>
-      ${this.practiceInst()}
+      ${this.songHead()}${this.practiceInst()}
 
       <div style="display:flex;gap:10px;margin-top:12px;align-items:stretch">${hero}${upNext}</div>
 
@@ -1410,9 +1462,15 @@ const App = {
 
   tabbar(){
     const st=this.state;
-    const tabs=[['play','Play','◉'],['drum',st.inst==='ukulele'?'Ukulele':'Drum','◍'],['capture','Capture','◐'],['book','Book','▤'],['learn','Learn','♪'],['record','Record','●']];
-    return tabs.map(t=>`<button data-act="tab" data-v="${t[0]}" style="flex:1;display:flex;flex-direction:column;align-items:center;gap:5px;border:0;background:none;cursor:pointer;padding:4px 0;color:${st.tab===t[0]?'#d2cefd':'#595d6c'}">
-      <span style="font-size:16px;line-height:1">${t[2]}</span><span style="font:500 10px Inter,sans-serif">${t[1]}</span></button>`).join('');
+    const group=['me','book','capture'].includes(st.tab)||(['learn','record'].includes(st.tab))?'me':st.tab;
+    const tabs=[['play','Songs','♪'],['drum','Play freely','◍'],['me','Me','●']];
+    return tabs.map(t=>`<button data-act="tab" data-v="${t[0]}" aria-current="${group===t[0]?'page':'false'}" style="flex:1;display:flex;flex-direction:column;align-items:center;gap:5px;border:0;background:none;cursor:pointer;min-height:48px;padding:4px 0;color:${group===t[0]?'#d2cefd':'#75798c'}">
+      <span style="font-size:18px;line-height:1">${t[2]}</span><span style="font:500 12px Inter,sans-serif">${t[1]}</span></button>`).join('');
+  },
+
+  backBar(){
+    const st=this.state; if(st.from!=='practice') return '';
+    return `<div style="padding:0 16px"><button class="mf-quiet" data-act="backToSong">‹ ${esc(this.song().title)}</button></div>`;
   },
 
   render(){
@@ -1420,19 +1478,25 @@ const App = {
     let html='';
     switch(st.screen){
       case 'library': html=this.screenLibrary(); break;
+      case 'me': html=this.screenMe(); break;
       case 'practice': html=(st.inst==='ukulele'&&this.hasUke(this.song()))?this.screenUkePractice():this.screenPractice(); break;
       case 'drum': html=this.screenDrum(); break;
       case 'capture': html=this.screenCapture(); break;
       case 'editor': html=this.screenEditor(); break;
       case 'book': html=this.screenBook(); break;
-      case 'learn': html='<div id="learn-host"></div>'; break;
-      case 'record': html='<div id="record-host"></div>'; break;
+      case 'learn': html=this.backBar()+'<div id="learn-host"></div>'; break;
+      case 'record': html=this.backBar()+'<div id="record-host"></div>'; break;
     }
+    if(!st.instPicked||st.picking) html=this.screenPick();
     if(st.screen!=='learn'&&window.MF_LEARN) MF_LEARN.unmount();
     document.getElementById('scroll').innerHTML=html;
-    if(st.screen==='learn'&&window.MF_LEARN) MF_LEARN.mount(document.getElementById('learn-host'));
+    const lh=document.getElementById('learn-host');
+    if(st.screen==='learn'&&window.MF_LEARN&&lh){ MF_LEARN.onInst=v=>{ this.state.inst=v; this.save(); };
+      MF_LEARN.mount(lh,{inst:st.inst,lesson:this._lessonReq}); this._lessonReq=null; }
     if(st.screen!=='record'&&window.MF_RECORD) MF_RECORD.unmount();
-    if(st.screen==='record'&&window.MF_RECORD) MF_RECORD.mount(document.getElementById('record-host'));
+    const rh=document.getElementById('record-host');
+    if(st.screen==='record'&&window.MF_RECORD&&rh){ MF_RECORD.onInst=v=>{ this.state.inst=v; this.save(); };
+      MF_RECORD.mount(rh,{inst:st.inst}); }
     document.getElementById('tabbar').innerHTML=this.tabbar();
     const tb=document.getElementById('mf-tab'), now=tb&&tb.querySelector('[data-tab-now]');
     if(tb){ tb.style.scrollBehavior='auto'; tb.scrollLeft=this._tabX||0;
@@ -1454,7 +1518,29 @@ const App = {
       case 'tab': this.stop();
         // Leaving Capture mid-recording keeps what was heard rather than losing it.
         if(st.rec==='listening'){ const info=this.finishCapture(); Object.assign(st,{rec:'idle',hasCap:info.count>0,capInfo:info}); }
-        this.setState({tab:ds.v,screen:ds.v==='play'?'library':ds.v}); break;
+        this.setState({tab:ds.v,screen:ds.v==='play'?'library':ds.v,from:null,picking:false,book:(ev&&ev.target&&ev.target.closest&&ev.target.closest('[data-book]'))?'mine':st.book}); break;
+      case 'songMode': this.stop(); this.setState({songMode:ds.v}); break;
+      case 'toggleMore': this.setState({more:!st.more}); break;
+      case 'pickInstOpen': this.stop(); this.setState({picking:true}); break;
+      case 'pickInstClose': this.setState({picking:false}); break;
+      case 'pickInst': try{ localStorage.setItem('melodyflow-inst-picked','1'); }catch(e){}
+        this.stop(); this.setState({inst:ds.v,instPicked:true,picking:false}); break;
+      case 'search': st.q=ev.target.value; this.render(); break;
+      case 'backToSong': this.setState({screen:'practice',from:null}); break;
+      case 'primary': {
+        const pr=MF_UX.primary(st.songMode,s,st.playing||st.armed);
+        const uke=st.inst==='ukulele'&&this.hasUke(s);
+        if(pr.action==='play'){
+          if(st.playing||st.armed){ this.stop(); this.render(); }
+          else if(uke){ this.setState({ukeSong:'along'}); this.dispatch('ukeWhole',ds,ev); }
+          else { if(st.mode==='solo') this.state.mode='guided'; this.dispatch('playSong',ds,ev); }
+        } else if(pr.action==='lesson'){ this.stop(); this._lessonReq=pr.lesson; this.setState({screen:'learn',from:'practice'}); }
+        else if(pr.action==='step'){ this.stop();
+          if(uke){ this.setState({ukeSong:'solo'}); this.startUkeSolo('line'); }
+          else { this.setState({mode:'solo',more:true}); this.startSolo('line'); } }
+        else if(pr.action==='record'){ this.stop(); this.setState({screen:'record',from:'practice'}); }
+        else { this.stop(); this.setState({tab:'capture',screen:'capture',from:null}); this.flash('Backing-track recording is Jingle Bells only for now. Capture records you.'); }
+      } break;
       case 'goDrums': this.setState({tab:'drum',screen:'drum',drumMode:'layout'}); break;
       case 'resume': this.setState({screen:'practice'}); break;
       case 'filter': this.setState({filter:ds.v}); break;
@@ -1572,7 +1658,12 @@ const App = {
     // A mic left open in the background is a mic someone did not ask for.
     document.addEventListener('visibilitychange',()=>{ if(document.hidden){ this.micStop(); this.render(); } else this.render(); });
     root.addEventListener('click',e=>handle(e,false));
-    root.addEventListener('change',e=>handle(e,true));
+    root.addEventListener('change',e=>{ if(e.target.getAttribute&&e.target.getAttribute('data-act')==='search') return; handle(e,true); });
+    root.addEventListener('input',e=>{
+      if(!(e.target.getAttribute&&e.target.getAttribute('data-act')==='search')) return;
+      this.state.q=e.target.value; const q=MF_UX.norm(e.target.value).trim();
+      document.querySelectorAll('[data-song-list] [data-search]').forEach(b=>{ b.style.display=(!q||b.getAttribute('data-search').indexOf(q)>=0)?'':'none'; });
+    });
     this.render();
   }
 };
