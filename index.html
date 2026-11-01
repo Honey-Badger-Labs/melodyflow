@@ -8,7 +8,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="MelodyFlow">
 <title>MelodyFlow</title>
-<link rel="manifest" href="manifest.webmanifest">
+<link rel="manifest" href="manifest.webmanifest?v=13">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
@@ -54,8 +54,11 @@ input[type=range]{accent-color:var(--color-accent);background:transparent}
 .mf-learn [data-midi]{cursor:pointer}
 /* Landscape phones: short and wide. Controls become one scrolling strip,
    the staff and the instrument sit side by side so both are always in view. */
+/* phones held sideways: drop the 440px portrait column on ALL screens */
 @media (orientation:landscape) and (max-height:560px){
   #phone{max-width:none}
+  /* every screen, not just Learn/Record, uses the full width when sideways */
+  #scroll>*{max-width:900px;margin-left:auto;margin-right:auto}
   #scroll{padding:4px 0 0}
   nav#tabbar{padding:2px 10px calc(2px + env(safe-area-inset-bottom))}
   nav#tabbar button{flex-direction:row!important;gap:6px!important;padding:6px 0!important}
