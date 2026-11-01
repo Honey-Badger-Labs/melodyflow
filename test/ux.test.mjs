@@ -15,7 +15,7 @@ const hasUke = (x) => !!x.chords;
 
 test('three modes, three instruments, four filters', () => {
   assert.deepEqual(U.MODES.map((m) => m[0]), ['listen', 'learn', 'record']);
-  assert.deepEqual(U.INSTRUMENTS.map((m) => m[0]), ['drum', 'ukulele', 'piano']);
+  assert.deepEqual(U.INSTRUMENTS.map((m) => m[0]), ['drum', 'ukulele', 'piano', 'harmonica', 'kalimba']);
   assert.ok(U.FILTERS.length <= 4);
 });
 
@@ -23,9 +23,10 @@ test('the big button follows the mode', () => {
   assert.equal(U.primary('listen', songs[0]).label, '▶ Play');
   assert.equal(U.primary('listen', songs[0], true).label, '■ Stop');
   assert.deepEqual(U.primary('learn', songs[0]), { label: '▶ Start lesson', action: 'lesson', lesson: 'twinkle' });
-  assert.equal(U.primary('learn', songs[1]).action, 'step');
+  // Every song goes to the Learn screen (never the drum step-through) and can be recorded.
+  assert.deepEqual(U.primary('learn', songs[1]), { label: '▶ Start lesson', action: 'lesson', song: 'jingle' });
   assert.equal(U.primary('record', songs[1]).action, 'record');
-  assert.equal(U.primary('record', songs[0]).action, 'capture');
+  assert.equal(U.primary('record', songs[0]).action, 'record');
 });
 
 test('one list: filter and accent-insensitive search', () => {

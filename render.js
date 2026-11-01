@@ -19,8 +19,14 @@
   const midiOf = (n) => { const m = /^([A-G])([#b]?)(-?\d)$/.exec(n); return 12 * (+m[3] + 1) + NOTE[m[1]] + (m[2] === '#' ? 1 : m[2] === 'b' ? -1 : 0); };
   // GCEA re-entrant: G4 C4 E4 A4 open; shapes as fret per string.
   const UKE_OPEN = [67, 60, 64, 69];
-  const SHAPES = { C: [0, 0, 0, 3], F: [2, 0, 1, 0], G7: [0, 2, 1, 2], Dm: [2, 2, 1, 0], D7: [2, 2, 2, 3] };
-  const ROOT = { C: 48, F: 41, G7: 43, Dm: 50, D7: 50 };
+  // The app's chord chart (instruments.js) when loaded, else the five Jingle Bells needs.
+  const SHAPES = Object.assign({ C: [0, 0, 0, 3], F: [2, 0, 1, 0], G7: [0, 2, 1, 2], Dm: [2, 2, 1, 0], D7: [2, 2, 2, 3] },
+    (root.MF && root.MF.INSTRUMENTS && root.MF.INSTRUMENTS.ukulele.shapes) || {});
+  /** Left-hand root for a chord name: in octave 2/3, between F2 and E3. */
+  const rootOf = (c) => { const m = /^([A-G])([#b]?)/.exec(c || ''); if (!m) return null; const pc = (NOTE[m[1]] + (m[2] === '#' ? 1 : m[2] === 'b' ? -1 : 0) + 12) % 12; return pc >= 5 ? 36 + pc : 48 + pc; };
+  const ROOT = new Proxy({}, { get: (_, c) => rootOf(String(c)) });
+  /** Everything the ensemble can include, in mix order. */
+  const VOICES = [['piano', 'Piano'], ['drum', 'Tongue drum'], ['ukulele', 'Ukulele'], ['harmonica', 'Harmonica'], ['kalimba', 'Kalimba']];
 
   function rng(seed) { let s = seed >>> 0; return () => ((s = (s * 1664525 + 1013904223) >>> 0) / 4294967296); }
 
@@ -51,11 +57,20 @@
     }
   }
 
+  /** A song's chords as [name|null, beats]; one-per-bar lists are expanded. */
+  function chordTimeline(song) {
+    const bpb = song.beatsPerBar || 4;
+    return (song.chords || []).map((x) => (Array.isArray(x) ? x : [x, bpb]));
+  }
+
+  /** opts.include: which of VOICES to render (default piano, drum, ukulele). */
   function render(song, bpm, opts = {}) {
     const sr = opts.sampleRate || 44100, spb = 60 / bpm, bpb = song.beatsPerBar || 4;
+    const want = new Set(opts.include || ['piano', 'drum', 'ukulele']);
     const beats = song.notes.reduce((a, [, d]) => a + d, 0), tail = 2.5;
     const len = Math.ceil((beats * spb + tail) * sr);
     const drum = new Float32Array(len), piano = new Float32Array(len), ukulele = new Float32Array(len);
+    const harmonica = new Float32Array(len), kalimba = new Float32Array(len);
     const rand = rng(1857);
     let b = 0;
     for (const [name, d] of song.notes) {
@@ -67,23 +82,32 @@
         [[1, 1, 1], [2.001, 0.5, 1.5], [3.003, 0.25, 2.2], [4.006, 0.12, 3], [5.01, 0.06, 4], [6.02, 0.03, 5]], 1.6);
       // hammer click
       const i0 = Math.floor(t * sr); for (let i = 0; i < sr * 0.004 && i0 + i < len; i++) piano[i0 + i] += 0.02 * (rand() * 2 - 1) * (1 - i / (sr * 0.004));
+      if (want.has('harmonica')) reed(harmonica, sr, t, hz(harpFit(m)), d * spb);
+      if (want.has('kalimba')) addTone(kalimba, sr, t, hz(kalFit(m)), 1.6, 0.3, [[1, 1, 1], [5.4, 0.12, 6], [8.9, 0.04, 9]], 2.6);
       b += d;
     }
-    const strum = [[0, 'D'], [1, 'D'], [1.5, 'U'], [2, 'D'], [2.5, 'U'], [3, 'D']];
-    song.chords.forEach((c, bar) => {
-      const t0 = bar * bpb * spb, frets = SHAPES[c];
-      for (const [beat, dir] of strum) {
-        const order = dir === 'D' ? [0, 1, 2, 3] : [3, 2, 1, 0], g = dir === 'D' ? 0.16 : 0.1;
-        order.forEach((s, k) => pluck(ukulele, sr, t0 + beat * spb + k * 0.012, hz(UKE_OPEN[s] + frets[s]), g, rand, 1.2));
+    // Chords on the song's own beat: in 4/4 D on every beat and U on the
+    // off-beats after beat 1 (D · DU · DU · D); in 3 or 6, D on every beat.
+    // The piano left hand plays the root on each bar's 1 and the fifth half-way.
+    let cb = 0;
+    for (const [c, dur] of chordTimeline(song)) {
+      const frets = c && SHAPES[c], r = c && ROOT[c];
+      for (let k = 0; k < dur - 1e-9; k += 0.5) {
+        const at = cb + k, inBar = ((at + (song.pickup ? bpb - song.pickup : 0)) % bpb + bpb) % bpb, half = k % 1 !== 0;
+        if (frets && (!half || (bpb === 4 && inBar > 1 && inBar !== 3.5))) {
+          const dir = half ? 'U' : 'D', order = dir === 'D' ? [0, 1, 2, 3] : [3, 2, 1, 0], g = dir === 'D' ? 0.16 : 0.1;
+          order.forEach((s, j) => pluck(ukulele, sr, at * spb + j * 0.012, hz(UKE_OPEN[s] + frets[s]), g, rand, 1.2));
+        }
+        if (r && !half && (inBar === 0 || k === 0)) addTone(piano, sr, at * spb, hz(r), Math.min(2, bpb / 2) * spb + 0.3, 0.16, [[1, 1, 1], [2, 0.45, 1.6], [3, 0.2, 2.4], [4, 0.08, 3]], 1.4);
+        if (r && bpb === 4 && inBar === 2) addTone(piano, sr, at * spb, hz(r + 7), 2 * spb + 0.3, 0.12, [[1, 1, 1], [2, 0.45, 1.6], [3, 0.2, 2.4]], 1.4);
       }
-      // piano left hand: root on 1, fifth on 3
-      const r = ROOT[c];
-      addTone(piano, sr, t0, hz(r), 2 * spb + 0.3, 0.16, [[1, 1, 1], [2, 0.45, 1.6], [3, 0.2, 2.4], [4, 0.08, 3]], 1.4);
-      addTone(piano, sr, t0 + 2 * spb, hz(r + 7), 2 * spb + 0.3, 0.12, [[1, 1, 1], [2, 0.45, 1.6], [3, 0.2, 2.4]], 1.4);
-    });
-    const stems = { piano, drum, ukulele };
+      cb += dur;
+    }
+    const all = { piano, drum, ukulele, harmonica, kalimba }, stems = {};
+    for (const [id] of VOICES) if (want.has(id)) stems[id] = all[id];
+    if (!chordTimeline(song).some(([c]) => c)) delete stems.ukulele; // melody-only song
     for (const k in stems) normalize(stems[k], 0.7);
-    const pan = { piano: -0.35, drum: 0, ukulele: 0.35 }, lvl = { piano: 0.75, drum: 0.95, ukulele: 0.7 };
+    const pan = { piano: -0.35, drum: 0, ukulele: 0.35, harmonica: 0.15, kalimba: -0.15 }, lvl = { piano: 0.75, drum: 0.95, ukulele: 0.7, harmonica: 0.6, kalimba: 0.7 };
     const L = new Float32Array(len), R = new Float32Array(len);
     for (const k in stems) {
       const a = (pan[k] + 1) * Math.PI / 4, gl = Math.cos(a) * lvl[k], gr = Math.sin(a) * lvl[k], s = stems[k];
@@ -92,8 +116,29 @@
     const peak = Math.max(peakOf(L), peakOf(R)); if (peak > 0.89) { const g = 0.89 / peak; for (let i = 0; i < len; i++) { L[i] *= g; R[i] *= g; } }
     return { sampleRate: sr, stems, mix: [L, R], seconds: len / sr };
   }
+  /* Harmonica: a free reed is a buzzy, sustained tone — a band of harmonics
+     with slow attack, gentle vibrato and a breathy edge. Notes a C harp can't
+     sound plainly are moved by octaves to one it can (see songlesson.js). */
+  function reed(buf, sr, t, f, dur, gain = 0.22) {
+    const i0 = Math.floor(t * sr), n = Math.min(buf.length - i0, Math.floor((dur * 0.95 + 0.05) * sr));
+    const parts = [[1, 1], [2, 0.7], [3, 0.45], [4, 0.3], [5, 0.18], [6, 0.1], [7, 0.06]];
+    let ph = 0;
+    for (let i = 0; i < n; i++) {
+      const tt = i / sr, vib = 1 + 0.004 * Math.sin(2 * Math.PI * 5.2 * tt) * Math.min(1, tt / 0.3);
+      ph += 2 * Math.PI * f * vib / sr;
+      let v = 0; for (const [m, a] of parts) v += a * Math.sin(m * ph);
+      const env = Math.min(1, tt / 0.04) * (i > n - sr * 0.04 ? (n - i) / (sr * 0.04) : 1);
+      buf[i0 + i] += gain * env * v / 2.8;
+    }
+  }
+  const HARP = [60, 62, 64, 67, 71, 72, 74, 76, 77, 79, 81, 83, 84, 86, 88, 89, 91, 93, 96];
+  /** Nearest octave of m that a C harp plays without bends (C4–C7). */
+  function harpFit(m) { for (const o of [0, 12, -12, 24]) if (HARP.includes(m + o)) return m + o; return m; }
+  /** 17-key C kalimba covers C4–E6, white notes only. */
+  function kalFit(m) { let x = m; while (x < 60) x += 12; while (x > 88) x -= 12; return x; }
+
   function peakOf(a) { let p = 0; for (let i = 0; i < a.length; i++) { const v = Math.abs(a[i]); if (v > p) p = v; } return p; }
   function normalize(a, to) { const p = peakOf(a); if (p > 0) { const g = to / p; for (let i = 0; i < a.length; i++) a[i] *= g; } }
 
-  root.MF_RENDER = { render, midiOf, SHAPES, peakOf };
+  root.MF_RENDER = { render, midiOf, SHAPES, peakOf, VOICES, chordTimeline, harpFit, rootOf };
 })(typeof globalThis !== 'undefined' ? globalThis : this);

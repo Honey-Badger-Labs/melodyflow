@@ -4,22 +4,22 @@
 (function (root) {
   'use strict';
   const MODES = [['listen', 'Listen'], ['learn', 'Learn'], ['record', 'Record']];
-  const INSTRUMENTS = [['drum', 'Tongue drum', '🥁'], ['ukulele', 'Ukulele', '🪕'], ['piano', 'Piano', '🎹']];
-  // Songbook ids that have a guided staff lesson in learn.js.
+  const INSTRUMENTS = [['drum', 'Tongue drum', '🥁'], ['ukulele', 'Ukulele', '🪕'], ['piano', 'Piano', '🎹'], ['harmonica', 'Harmonica', '🎵'], ['kalimba', 'Kalimba', '🎶']];
+  // Songbook ids with a hand-written lesson (and tip) in learn.js. Every other
+  // song is taught from its own Songbook notes (songlesson.js).
   const LESSON_FOR = { twinkle: 'twinkle', ode: 'ode', mary: 'mary' };
-  // Songbook ids that the Record screen (click + guide + ensemble render) knows.
-  const RECORD_FOR = { jingle: true };
   const FILTERS = [['all', 'All'], ['uke', 'Chords'], ['mine', 'Mine'], ['christmas', 'Christmas']];
 
   function lessonFor(id) { return LESSON_FOR[id] || null; }
-  function canRecord(id) { return !!RECORD_FOR[id]; }
+  /** Every song with notes can be recorded along to now. */
+  function canRecord(id) { return !!id; }
 
   /* What the big button says and does for a mode on a song. */
   function primary(mode, song, playing) {
     const id = song && song.id;
     if (mode === 'learn') return lessonFor(id)
       ? { label: '▶ Start lesson', action: 'lesson', lesson: lessonFor(id) }
-      : { label: '▶ Start lesson', action: 'step' };
+      : { label: '▶ Start lesson', action: 'lesson', song: id };
     if (mode === 'record') return canRecord(id)
       ? { label: '● Record', action: 'record' }
       : { label: '● Record', action: 'capture' };

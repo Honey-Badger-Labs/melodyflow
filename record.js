@@ -36,9 +36,31 @@
   const VERSE_CHORDS = ['C','C','C','F','F','G7','G7','C','C','C','C','F','F','C','G7','C'];
   const CHORUS_CHORDS = ['C','C','C','C','F','C','G7','G7','C','C','C','C','F','C','G7','C'];
   const SONG = {
-    title: 'Jingle Bells', composer: 'James Lord Pierpont (1857)', beatsPerBar: 4,
+    id: 'jingle', title: 'Jingle Bells', composer: 'James Lord Pierpont (1857)', beatsPerBar: 4,
     notes: [...VERSE, ...CHORUS], chords: [...VERSE_CHORDS, ...CHORUS_CHORDS], tempo: 110,
   };
+
+  const slug = (t) => String(t || 'song').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'song';
+  const INST_FILE = { drum: 'tongue-drum', ukulele: 'ukulele', piano: 'piano', harmonica: 'harmonica', kalimba: 'kalimba' };
+  const INSTS = [['drum', 'Tongue drum'], ['ukulele', 'Ukulele'], ['piano', 'Piano'], ['harmonica', 'Harmonica'], ['kalimba', 'Kalimba']];
+
+  /** Chords as [name, beats] whether the song lists one per bar or a timeline. */
+  function chordTimeline(song) {
+    const c = song.chords || [];
+    return c.map((x) => (Array.isArray(x) ? x : [x, song.beatsPerBar || 4]));
+  }
+  /** The chord sounding at a beat of the song (beat 0 = first note). */
+  function chordAt(song, beat) {
+    let t = 0;
+    for (const [name, d] of chordTimeline(song)) { if (beat < t + d - 1e-9) return name; t += d; }
+    return null;
+  }
+  /** Any Songbook song, ready to record: Jingle Bells keeps its full sourced arrangement. */
+  function forSong(song) {
+    if (!song || song.id === 'jingle' || !root.MF_SONGLESSON) return SONG;
+    const x = root.MF_SONGLESSON.fromSong(song);
+    return { id: x.id, title: x.title, beatsPerBar: x.beatsPerBar, pickup: x.pickup, notes: x.notes, chords: x.chords, tempo: x.bpm, melodyOnly: x.melodyOnly };
+  }
 
   /** Where to play a note; notes below the instrument are raised an octave (flagged). */
   function placeNote(name, inst) {
@@ -52,7 +74,9 @@
 
   /** Seconds at which each note starts, after a count-in of `countBars` bars. */
   function schedule(song, bpm, countBars = 2) {
-    const spb = 60 / bpm, lead = countBars * song.beatsPerBar;
+    // A pickup starts that many beats before the bar line, so the count-in is
+    // shortened by it and the first full bar still lands on an accented click.
+    const spb = 60 / bpm, lead = countBars * song.beatsPerBar - (song.pickup || 0);
     let beat = lead;
     const notes = song.notes.map(([n, d]) => { const t = beat * spb; beat += d; return { name: n, beats: d, t }; });
     const clicks = [];
@@ -60,10 +84,10 @@
     return { notes, clicks, songStart: lead * spb, end: beat * spb };
   }
 
-  function fileName(inst, bpm, ext, d = new Date()) {
+  function fileName(inst, bpm, ext, d = new Date(), title = 'Jingle Bells') {
     const p = (x) => String(x).padStart(2, '0');
     const stamp = `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}`;
-    return `jingle-bells_${inst === 'drum' ? 'tongue-drum' : 'ukulele'}_${bpm}bpm_${stamp}.${ext}`;
+    return `${slug(title)}_${INST_FILE[inst] || inst}_${bpm}bpm_${stamp}.${ext}`;
   }
 
   function pickMime(isSupported) {
@@ -86,7 +110,7 @@
   }
 
   // ── view ────────────────────────────────────────────────────────────
-  const S = { inst: 'drum', bpm: 110, guide: true, state: 'idle', i: -1, bar: -1, count: 0, take: null, msg: '', tip: false };
+  const S = { song: SONG, include: { piano: true, drum: true, ukulele: true, harmonica: false, kalimba: false }, picking: false, inst: 'drum', bpm: 110, guide: true, state: 'idle', i: -1, bar: -1, count: 0, take: null, msg: '', tip: false };
   let host = null, ac = null, rec = null, stream = null, timers = [], raf = 0;
   const ACC = '#a99cf8', DIM = '#75798c', INK = '#e7e6ee';
   const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
@@ -107,35 +131,43 @@
   }
 
   function noteCard(k) {
-    const [name] = SONG.notes[k] || [];
+    const [name] = S.song.notes[k] || [];
     if (!name) return '';
     const w = placeNote(name, S.inst);
     if (!w) return esc(name);
-    return S.inst === 'drum' ? `<b style="font-size:44px">${esc(String(w.pad))}</b>` : `<b style="font-size:24px">${esc(w.stringName)} string · fret ${w.fret}</b>`;
+    return S.inst === 'drum' ? `<b style="font-size:44px">${esc(String(w.pad))}</b>`
+      : S.inst === 'ukulele' ? `<b style="font-size:24px">${esc(w.stringName)} string · fret ${w.fret}</b>`
+      : `<b style="font-size:24px">${esc(w.text)}</b>`;
   }
 
   function draw() {
     if (!host) return;
-    const sch = schedule(SONG, S.bpm);
+    const sch = schedule(S.song, S.bpm);
     const btn = (a, v, label, on) => `<button data-r="${a}" data-v="${v}" class="mf-btn" style="border:1px solid ${on ? ACC : '#3a3d47'};background:${on ? '#2b2741' : 'transparent'};color:${on ? '#d2cefd' : INK}">${label}</button>`;
     const busy = S.state !== 'idle';
-    const bar = S.i >= 0 ? Math.floor((sch.notes[S.i].t - sch.songStart) / (60 / S.bpm) / 4) : -1;
-    const strip = SONG.notes.map(([n, d], k) => {
-      const w = placeNote(n, S.inst), lab = S.inst === 'drum' ? (w ? w.pad : '?') : (w ? `${w.stringName}${w.fret}` : '?');
+    const chordNow = S.i >= 0 ? chordAt(S.song, (sch.notes[S.i].t - sch.songStart) / (60 / S.bpm)) : null;
+    const R = root.MF_RENDER, picks = R ? R.VOICES : [];
+    const strip = S.song.notes.map(([n, d], k) => {
+      const w = placeNote(n, S.inst), lab = !w ? '?' : S.inst === 'drum' ? w.pad : S.inst === 'ukulele' ? `${w.stringName}${w.fret}` : S.inst === 'harmonica' ? w.tab : S.inst === 'kalimba' ? w.num : n.replace(/\d/, '');
       return `<span data-rec-note="${k}" style="display:inline-block;min-width:${Math.max(26, d * 26)}px;padding:6px 2px;text-align:center;border-radius:6px;${k === S.i ? `background:${ACC};color:#161826;` : ''}${w && w.raised ? 'text-decoration:underline dotted;' : ''}">${esc(String(lab))}</span>`;
     }).join('');
     host.innerHTML = `<div data-record class="mf-record" style="padding:10px 16px;display:flex;flex-direction:column;gap:10px">
-      <div class="mf-row"><span style="font:500 20px var(--font-heading,serif);margin-right:8px">Record · Jingle Bells</span>
-        ${btn('inst', 'drum', 'Tongue drum', S.inst === 'drum')}${btn('inst', 'ukulele', 'Ukulele', S.inst === 'ukulele')}
-        <label style="font:400 13px Inter,sans-serif;color:${DIM}">Tempo <input data-r="bpm" type="range" min="60" max="140" value="${S.bpm}" ${busy ? 'disabled' : ''}> ${S.bpm} BPM</label>
+      <div class="mf-row"><span style="font:500 20px var(--font-heading,serif);margin-right:8px">Record · ${esc(S.song.title)}</span>
+        ${INSTS.map(([id, label]) => btn('inst', id, label, S.inst === id)).join('')}
+        <label style="font:400 13px Inter,sans-serif;color:${DIM}">Tempo <input data-r="bpm" type="range" min="40" max="160" value="${S.bpm}" ${busy ? 'disabled' : ''}> ${S.bpm} BPM</label>
         ${btn('guide', '', S.guide ? 'Guide melody: on' : 'Guide melody: off', S.guide)}
         ${btn('tip', '', '?', S.tip)}
-        ${root.MF_RENDER ? btn('render', '', '♫ Render ensemble (WAV stems + mix)', false) : ''}</div>
+        ${R ? btn('pick', '', '♫ Render ensemble…', S.picking) : ''}</div>
+      ${R && S.picking ? `<div data-ensemble-picker class="mf-row" style="background:#17181c;border-radius:10px;padding:10px;flex-wrap:wrap">
+        <span style="font:500 13px Inter,sans-serif;color:${DIM}">Include:</span>
+        ${picks.map(([id, label]) => `<label style="font:500 14px Inter,sans-serif;color:${INK};display:flex;gap:6px;align-items:center"><input type="checkbox" data-r="incl" data-v="${id}" ${S.include[id] ? 'checked' : ''}> ${label}</label>`).join('')}
+        ${btn('render', '', `Render ${picks.filter(([id]) => S.include[id]).length} stems + mix`, false)}
+        ${S.song.melodyOnly ? `<span style="font:400 12px Inter,sans-serif;color:#e0c79a">No chord line in the Songbook: ukulele and the piano left hand are skipped.</span>` : ''}</div>` : ''}
       <button data-r="go" class="mf-btn" style="width:100%;min-height:56px;border:0;border-radius:14px;background:${busy ? '#423a6a' : ACC};color:${busy ? '#f5f4ff' : '#161826'};font:600 18px Inter,sans-serif">${busy ? '■ Stop' : '● Record'}</button>
-      <div style="${S.tip ? '' : 'display:none;'}font:400 13px/1.5 Inter,sans-serif;color:#a2a4b0">🎧 Wear headphones: the click and guide play in your ears and are never written to the take, but open speakers would leak into the mic. 2-bar count-in (8 clicks), then play along. Dotted-underlined notes are raised an octave to fit the instrument.</div>
+      <div style="${S.tip ? '' : 'display:none;'}font:400 13px/1.5 Inter,sans-serif;color:#a2a4b0">🎧 Wear headphones: the click and guide play in your ears and are never written to the take, but open speakers would leak into the mic. 2-bar count-in in ${S.song.beatsPerBar}/4 at the song's own tempo${S.song.pickup ? ` (shortened by the ${S.song.pickup}-beat pickup)` : ''}, then play along. Dotted-underlined notes are raised an octave to fit the instrument.</div>
       <div class="mf-record-stage">
         <div data-rec-now style="background:#17181c;border-radius:10px;padding:14px;text-align:center;color:${ACC};min-height:110px">
-          ${S.state === 'count' ? `<b style="font-size:44px">${S.count}</b><div>count-in</div>` : S.i >= 0 ? `${noteCard(S.i)}${S.inst === 'ukulele' ? `<div style="color:${INK};font-size:20px">Chord: ${SONG.chords[bar] || ''}</div>` : ''}<div style="color:${DIM}">next: ${noteCard(S.i + 1).replace(/font-size:\d+px/, 'font-size:16px')}</div>` : `<span style="color:${DIM}">${esc(S.msg || 'Ready. Press ● Record.')}</span>`}
+          ${S.state === 'count' ? `<b style="font-size:44px">${S.count}</b><div>count-in</div>` : S.i >= 0 ? `${noteCard(S.i)}${chordNow ? `<div style="color:${INK};font-size:20px">Chord: ${esc(chordNow)}</div>` : ''}<div style="color:${DIM}">next: ${noteCard(S.i + 1).replace(/font-size:\d+px/, 'font-size:16px')}</div>` : `<span style="color:${DIM}">${esc(S.msg || 'Ready. Press ● Record.')}</span>`}
         </div>
         <div data-rec-strip style="background:#17181c;border-radius:10px;padding:8px;overflow:auto;max-height:46dvh;line-height:2;font:600 15px Inter,sans-serif;color:${INK}">${strip}</div>
       </div>
@@ -167,18 +199,18 @@
     rec.onstop = () => {
       const type = rec.mimeType || mime || 'audio/webm', ext = extFor(type), blob = new Blob(chunks, { type });
       if (S.take) URL.revokeObjectURL(S.take.url);
-      S.take = { blob, url: URL.createObjectURL(blob), ext, name: fileName(S.inst, S.bpm, ext) };
+      S.take = { blob, url: URL.createObjectURL(blob), ext, name: fileName(S.inst, S.bpm, ext, new Date(), S.song.title) };
       S.state = 'idle'; S.i = -1; S.msg = 'Take saved — download it, then drop it in the Christmas special folder in Drive.';
       cleanup(); draw();
     };
-    const sch = schedule(SONG, S.bpm), spb = 60 / S.bpm, t0 = ac.currentTime + 0.3;
+    const sch = schedule(S.song, S.bpm), spb = 60 / S.bpm, t0 = ac.currentTime + 0.3;
     sch.clicks.forEach((c) => click(t0 + c.t, c.accent));
     if (S.guide) sch.notes.forEach((n) => guideTone(t0 + n.t, n.name, n.beats, spb));
     rec.start();
     S.state = 'count'; S.take && (S.take = S.take); S.msg = '';
     const tick = () => {
       const now = ac.currentTime - t0;
-      if (now < sch.songStart) { S.state = 'count'; S.count = Math.max(1, Math.floor(now / spb) % 4 + 1); }
+      if (now < sch.songStart) { S.state = 'count'; S.count = Math.max(1, Math.floor(now / spb) % S.song.beatsPerBar + 1); }
       else { S.state = 'rec'; let k = S.i < 0 ? 0 : S.i; while (k + 1 < sch.notes.length && sch.notes[k + 1].t <= now) k++; S.i = k; }
       draw();
       if (now >= sch.end + spb) { if (rec.state !== 'inactive') rec.stop(); return; }
@@ -204,18 +236,18 @@
   function renderEnsemble() {
     S.msg = 'Rendering…'; draw();
     setTimeout(() => {
-      const r = root.MF_RENDER.render(SONG, S.bpm);
+      const want = root.MF_RENDER.VOICES.map(([id]) => id).filter((id) => S.include[id]);
+      if (!want.length) { S.msg = 'Tick at least one instrument.'; draw(); return; }
+      const r = root.MF_RENDER.render(S.song, S.bpm, { include: want });
       const save = (chs, name) => {
         const url = URL.createObjectURL(new Blob([encodeWav(chs, r.sampleRate)], { type: 'audio/wav' }));
         const a = root.document.createElement('a'); a.href = url; a.download = name; a.click();
         setTimeout(() => URL.revokeObjectURL(url), 10000);
       };
-      const base = `jingle-bells_${S.bpm}bpm`;
-      save([r.stems.piano], `${base}_piano_stem.wav`);
-      save([r.stems.drum], `${base}_tongue-drum_stem.wav`);
-      save([r.stems.ukulele], `${base}_ukulele_stem.wav`);
+      const base = `${slug(S.song.title)}_${S.bpm}bpm`, names = Object.keys(r.stems);
+      names.forEach((k) => save([r.stems[k]], `${base}_${INST_FILE[k] || k}_stem.wav`));
       save(r.mix, `${base}_ensemble_mix.wav`);
-      S.msg = `Rendered ${Math.round(r.seconds)} s: three stems and a mix.`; draw();
+      S.msg = `Rendered ${Math.round(r.seconds)} s: ${names.length} stem${names.length === 1 ? '' : 's'} (${names.join(', ')}) and a mix.`; draw();
     }, 30);
   }
 
@@ -228,14 +260,20 @@
       case 'go': S.state === 'idle' ? start() : stopRec(); break;
       case 'wav': downloadWav(); break;
       case 'render': renderEnsemble(); break;
+      case 'pick': S.picking = !S.picking; draw(); break;
     }
   }
-  function onInput(ev) { if (ev.target.dataset && ev.target.dataset.r === 'bpm') { S.bpm = +ev.target.value; draw(); } }
+  function onInput(ev) {
+    const d = ev.target.dataset || {};
+    if (d.r === 'bpm') { S.bpm = +ev.target.value; draw(); }
+    if (d.r === 'incl') { S.include[d.v] = !!ev.target.checked; draw(); }
+  }
 
   let wired = false;
   function mount(el, opts) {
     host = el;
-    if (opts && S.state === 'idle' && ['drum', 'ukulele'].includes(opts.inst)) S.inst = opts.inst;
+    if (opts && S.state === 'idle' && INST_FILE[opts.inst]) S.inst = opts.inst;
+    if (opts && S.state === 'idle' && opts.song) { const x = forSong(opts.song); if (x !== S.song && (x.id !== S.song.id || x.notes.length !== S.song.notes.length)) { S.song = x; S.bpm = x.tempo; S.i = -1; } }
     if (!wired && root.document) { wired = true;
       root.document.addEventListener('click', (e) => host && host.isConnected && onClick(e));
       root.document.addEventListener('change', (e) => host && host.isConnected && onInput(e)); }
@@ -243,5 +281,5 @@
   }
   function unmount() { stopRec(); host = null; }
 
-  root.MF_RECORD = { SONG, placeNote, schedule, fileName, pickMime, extFor, encodeWav, mount, unmount, _state: S };
+  root.MF_RECORD = { SONG, forSong, chordAt, chordTimeline, slug, placeNote, schedule, fileName, pickMime, extFor, encodeWav, mount, unmount, _state: S };
 })(typeof globalThis !== 'undefined' ? globalThis : this);

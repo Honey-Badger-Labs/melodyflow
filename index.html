@@ -109,6 +109,7 @@ input[type=range]{accent-color:var(--color-accent);background:transparent}
 <script src="tab.js"></script>
 <script src="songbook.js"></script>
 <script src="listen.js"></script>
+<script src="songlesson.js"></script>
 <script src="learn.js"></script>
 <script src="render.js"></script>
 <script src="record.js"></script>
@@ -1492,11 +1493,11 @@ const App = {
     document.getElementById('scroll').innerHTML=html;
     const lh=document.getElementById('learn-host');
     if(st.screen==='learn'&&window.MF_LEARN&&lh){ MF_LEARN.onInst=v=>{ this.state.inst=v; this.save(); };
-      MF_LEARN.mount(lh,{inst:st.inst,lesson:this._lessonReq}); this._lessonReq=null; }
+      MF_LEARN.mount(lh,{inst:st.inst,lesson:this._lessonReq,song:this._songReq}); this._lessonReq=null; this._songReq=null; }
     if(st.screen!=='record'&&window.MF_RECORD) MF_RECORD.unmount();
     const rh=document.getElementById('record-host');
     if(st.screen==='record'&&window.MF_RECORD&&rh){ MF_RECORD.onInst=v=>{ this.state.inst=v; this.save(); };
-      MF_RECORD.mount(rh,{inst:st.inst}); }
+      MF_RECORD.mount(rh,{inst:st.inst,song:this.song()}); }
     document.getElementById('tabbar').innerHTML=this.tabbar();
     const tb=document.getElementById('mf-tab'), now=tb&&tb.querySelector('[data-tab-now]');
     if(tb){ tb.style.scrollBehavior='auto'; tb.scrollLeft=this._tabX||0;
@@ -1534,7 +1535,7 @@ const App = {
           if(st.playing||st.armed){ this.stop(); this.render(); }
           else if(uke){ this.setState({ukeSong:'along'}); this.dispatch('ukeWhole',ds,ev); }
           else { if(st.mode==='solo') this.state.mode='guided'; this.dispatch('playSong',ds,ev); }
-        } else if(pr.action==='lesson'){ this.stop(); this._lessonReq=pr.lesson; this.setState({screen:'learn',from:'practice'}); }
+        } else if(pr.action==='lesson'){ this.stop(); this._lessonReq=pr.lesson||null; this._songReq=pr.song?MF_SONGLESSON.fromSong(s):null; this.setState({screen:'learn',from:'practice'}); }
         else if(pr.action==='step'){ this.stop();
           if(uke){ this.setState({ukeSong:'solo'}); this.startUkeSolo('line'); }
           else { this.setState({mode:'solo',more:true}); this.startSolo('line'); } }
