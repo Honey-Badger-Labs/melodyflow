@@ -64,3 +64,12 @@ test('manifest no longer locks portrait', async () => {
   const m = JSON.parse(fs.readFileSync(path.join(here, '..', 'manifest.webmanifest'), 'utf8'));
   assert.notEqual(m.orientation, 'portrait');
 });
+
+test('rotation: cache bumped, manifest re-fetched, every screen widens in landscape', async () => {
+  const fs = await import('node:fs');
+  const read = (f) => fs.readFileSync(path.join(here, '..', f), 'utf8');
+  assert.match(read('sw.js'), /melodyflow-v13/);
+  assert.match(read('index.html'), /manifest\.webmanifest\?v=13/);
+  assert.match(read('index.html'), /max-height:560px\)\{\n  #phone\{max-width:none\}/);
+  assert.doesNotMatch(read('index.html') + read('learn.js') + read('record.js'), /orientation\.lock\(/);
+});
