@@ -154,6 +154,7 @@
     }
     const SL = root.MF_SONGLESSON;
     if (inst === 'harmonica' && SL) { const h = SL.harpHole(name); return h && { ...h, midi: parseNote(name).midi }; }
+    if (inst === 'ocarina' && SL) { const o = SL.ocarinaHole(name); return o && { ...o, midi: parseNote(name).midi }; }
     if (inst === 'kalimba' && SL) { const k = SL.kalimbaTine(name); return k && { ...k, midi: parseNote(name).midi }; }
     return null;
   }
@@ -176,12 +177,12 @@
   }
 
   /** Learn instruments, in the order shown. */
-  const INSTS = [['piano', 'Piano'], ['drum', 'Tongue drum'], ['ukulele', 'Ukulele'], ['harmonica', 'Harmonica (C)'], ['kalimba', 'Kalimba (17)']];
+  const INSTS = [['piano', 'Piano'], ['drum', 'Tongue drum'], ['ukulele', 'Ukulele'], ['harmonica', 'Harmonica (C)'], ['kalimba', 'Kalimba (17)'], ['ocarina', 'Ocarina (12-hole C)']];
   const INST_IDS = INSTS.map((x) => x[0]);
 
   /** Which instrument panel the view draws — the selected one, always. */
   function panelFor(inst) {
-    return { piano: 'piano', drum: 'drum', ukulele: 'uke', harmonica: 'harmonica', kalimba: 'kalimba' }[inst] || 'piano';
+    return { piano: 'piano', drum: 'drum', ukulele: 'uke', harmonica: 'harmonica', kalimba: 'kalimba', ocarina: 'ocarina' }[inst] || 'piano';
   }
 
   const api = { INSTS, panelFor,
@@ -290,6 +291,24 @@
     return s + `</div><div style="text-align:center;font:400 11px Inter,sans-serif;color:${DIM};margin-top:6px">↑ blow (tab 4) · ↓ draw (tab -4)</div>`;
   }
 
+  /** 12-hole ocarina from above: L1–L4 / R1–R4 on top, sub-holes SA/SB small
+      beside R1/R2, thumb holes LT/RT drawn dashed (underside). Filled = cover. */
+  function ocarinaSvg(w) {
+    const SL = root.MF_SONGLESSON; if (!SL) return '';
+    const cov = w && w.cover ? w.cover : null, at = (id) => cov ? cov[SL.OC_HOLES.indexOf(id)] : false;
+    const P = { L1: [70, 52, 12], L2: [104, 44, 12], L3: [138, 44, 12], L4: [170, 54, 11], R1: [222, 56, 12], R2: [256, 50, 12], R3: [290, 54, 12], R4: [322, 66, 11],
+      SA: [232, 82, 5], SB: [266, 78, 5], LT: [120, 112, 11], RT: [270, 112, 11] };
+    let s = `<svg data-learn-ocarina viewBox="0 0 400 140" style="width:100%;max-width:440px;display:block;margin:0 auto">
+      <path d="M20 70 Q30 18 200 22 Q370 26 385 70 Q370 128 200 124 Q30 120 20 70Z" fill="#c9a77c" stroke="#8a6a46" stroke-width="2"/>
+      <rect x="0" y="60" width="28" height="20" rx="5" fill="#b8956a"/>`;
+    for (const id of SL.OC_HOLES) {
+      const [x, y, r] = P[id], on = at(id), under = id === 'LT' || id === 'RT';
+      s += `<circle data-hole="${id}" data-cover="${on ? 1 : 0}" cx="${x}" cy="${y}" r="${r}" fill="${on ? ACC : '#2a2420'}" stroke="${on ? '#f5f4ff' : '#5b4a3a'}" stroke-width="2"${under ? ' stroke-dasharray="4 3"' : ''}/>`;
+      s += `<text x="${x}" y="${y + r + 11}" text-anchor="middle" font="10px Inter" font-size="9" fill="#3a2d20">${id}</text>`;
+    }
+    return s + `</svg><div style="text-align:center;font:400 11px Inter,sans-serif;color:${DIM};margin-top:4px">● cover · ○ open · dashed = thumb holes underneath${w && w.chart ? ` · chart: ${esc(w.chart)}` : ''}</div>`;
+  }
+
   function kalimbaSvg(w) {
     const SL = root.MF_SONGLESSON; if (!SL) return '';
     const n = SL.KALIMBA_LAYOUT.length, mid = (n - 1) / 2;
@@ -314,10 +333,13 @@
     if (panel === 'piano') inst = pianoSvg(cur >= 0 && w ? w.midi : null);
     else if (panel === 'drum') inst = drumSvg(cur >= 0 && w ? w.pad : null);
     else if (panel === 'harmonica') inst = harpSvg(cur >= 0 ? w : null);
+    else if (panel === 'ocarina') inst = ocarinaSvg(cur >= 0 ? w : null);
     else if (panel === 'kalimba') inst = kalimbaSvg(cur >= 0 ? w : null);
     else inst = ukeSvg(cur >= 0 ? w : null);
     const bad = S.inst === 'harmonica' && root.MF_SONGLESSON
       ? [...new Set(L.notes.map(([n]) => n).filter((n) => root.MF_SONGLESSON.harpProblem(n)))] : [];
+    const ocBad = S.inst === 'ocarina' && root.MF_SONGLESSON
+      ? [...new Set(L.notes.map(([n]) => n).filter((n) => root.MF_SONGLESSON.ocarinaProblem(n)))] : [];
     const ok = playableOn(L, S.inst);
     host.innerHTML = `<div data-learn class="mf-learn" style="padding:10px 16px;display:flex;flex-direction:column;gap:10px">
       <div class="mf-learn-turn" style="display:none;padding:8px 12px;border-radius:8px;background:#2b2741;color:#d2cefd;font:500 13px Inter,sans-serif">Tip: turn sideways for a bigger staff.</div>
@@ -338,6 +360,7 @@
       <div class="mf-learn-stage"><div class="mf-learn-staff" data-learn-staff-wrap style="overflow-x:auto;background:#17181c;border-radius:10px;padding:6px">${staffSvg(L, cur, S.names)}</div>
       <div data-learn-now style="font:600 15px Inter,sans-serif;color:${ACC};min-height:20px">${cur >= 0 ? `${esc(note.replace(/\d/, ''))} — ${w ? esc(w.text) + (w.finger ? `, finger ${w.finger}` : '') : 'not on this instrument'}` : (ok ? 'Press ' + (S.mode === 'watch' ? 'Play' : 'Start') + ' to begin.' : 'Some notes in this lesson are outside this instrument.')}${S.msg ? ` <span style="color:#e59">${esc(S.msg)}</span>` : ''}</div>
       ${bad.length ? `<div data-learn-harp-flag style="font:400 12px Inter,sans-serif;color:#e0c79a">Not playable on a C harp without bends: ${bad.map((n) => esc(n) + ' (' + esc(root.MF_SONGLESSON.harpProblem(n)) + ')').join(', ')}</div>` : ''}
+      ${ocBad.length ? `<div data-learn-ocarina-flag style="font:400 12px Inter,sans-serif;color:#e0c79a">Outside a 12-hole C ocarina (A4–F6) — Record and the ensemble move these by an octave: ${ocBad.map((n) => esc(n) + ' (' + esc(root.MF_SONGLESSON.ocarinaProblem(n)) + ')').join(', ')}</div>` : ''}
       <div class="mf-learn-inst" style="background:#17181c;border-radius:10px;padding:10px">${inst}</div></div>
     </div>`;
     follow();

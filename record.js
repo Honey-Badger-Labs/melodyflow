@@ -41,8 +41,8 @@
   };
 
   const slug = (t) => String(t || 'song').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'song';
-  const INST_FILE = { drum: 'tongue-drum', ukulele: 'ukulele', piano: 'piano', harmonica: 'harmonica', kalimba: 'kalimba' };
-  const INSTS = [['drum', 'Tongue drum'], ['ukulele', 'Ukulele'], ['piano', 'Piano'], ['harmonica', 'Harmonica'], ['kalimba', 'Kalimba']];
+  const INST_FILE = { drum: 'tongue-drum', ukulele: 'ukulele', piano: 'piano', harmonica: 'harmonica', kalimba: 'kalimba', ocarina: 'ocarina' };
+  const INSTS = [['drum', 'Tongue drum'], ['ukulele', 'Ukulele'], ['piano', 'Piano'], ['harmonica', 'Harmonica'], ['kalimba', 'Kalimba'], ['ocarina', 'Ocarina']];
 
   /** Chords as [name, beats] whether the song lists one per bar or a timeline. */
   function chordTimeline(song) {
@@ -110,7 +110,7 @@
   }
 
   // ── view ────────────────────────────────────────────────────────────
-  const S = { song: SONG, include: { piano: true, drum: true, ukulele: true, harmonica: false, kalimba: false }, picking: false, inst: 'drum', bpm: 110, guide: true, state: 'idle', i: -1, bar: -1, count: 0, take: null, msg: '', tip: false };
+  const S = { song: SONG, include: { piano: true, drum: true, ukulele: true, harmonica: false, kalimba: false, ocarina: false }, picking: false, inst: 'drum', bpm: 110, guide: true, state: 'idle', i: -1, bar: -1, count: 0, take: null, msg: '', tip: false };
   let host = null, ac = null, rec = null, stream = null, timers = [], raf = 0;
   const ACC = '#a99cf8', DIM = '#75798c', INK = '#e7e6ee';
   const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
@@ -148,7 +148,7 @@
     const chordNow = S.i >= 0 ? chordAt(S.song, (sch.notes[S.i].t - sch.songStart) / (60 / S.bpm)) : null;
     const R = root.MF_RENDER, picks = R ? R.VOICES : [];
     const strip = S.song.notes.map(([n, d], k) => {
-      const w = placeNote(n, S.inst), lab = !w ? '?' : S.inst === 'drum' ? w.pad : S.inst === 'ukulele' ? `${w.stringName}${w.fret}` : S.inst === 'harmonica' ? w.tab : S.inst === 'kalimba' ? w.num : n.replace(/\d/, '');
+      const w = placeNote(n, S.inst), lab = !w ? '?' : S.inst === 'drum' ? w.pad : S.inst === 'ukulele' ? `${w.stringName}${w.fret}` : S.inst === 'harmonica' ? w.tab : S.inst === 'kalimba' ? w.num : S.inst === 'ocarina' ? w.name.replace(/\d/, '') : n.replace(/\d/, '');
       return `<span data-rec-note="${k}" style="display:inline-block;min-width:${Math.max(26, d * 26)}px;padding:6px 2px;text-align:center;border-radius:6px;${k === S.i ? `background:${ACC};color:#161826;` : ''}${w && w.raised ? 'text-decoration:underline dotted;' : ''}">${esc(String(lab))}</span>`;
     }).join('');
     host.innerHTML = `<div data-record class="mf-record" style="padding:10px 16px;display:flex;flex-direction:column;gap:10px">

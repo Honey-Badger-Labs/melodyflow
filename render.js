@@ -26,7 +26,7 @@
   const rootOf = (c) => { const m = /^([A-G])([#b]?)/.exec(c || ''); if (!m) return null; const pc = (NOTE[m[1]] + (m[2] === '#' ? 1 : m[2] === 'b' ? -1 : 0) + 12) % 12; return pc >= 5 ? 36 + pc : 48 + pc; };
   const ROOT = new Proxy({}, { get: (_, c) => rootOf(String(c)) });
   /** Everything the ensemble can include, in mix order. */
-  const VOICES = [['piano', 'Piano'], ['drum', 'Tongue drum'], ['ukulele', 'Ukulele'], ['harmonica', 'Harmonica'], ['kalimba', 'Kalimba']];
+  const VOICES = [['piano', 'Piano'], ['drum', 'Tongue drum'], ['ukulele', 'Ukulele'], ['harmonica', 'Harmonica'], ['kalimba', 'Kalimba'], ['ocarina', 'Ocarina']];
 
   function rng(seed) { let s = seed >>> 0; return () => ((s = (s * 1664525 + 1013904223) >>> 0) / 4294967296); }
 
@@ -70,7 +70,7 @@
     const beats = song.notes.reduce((a, [, d]) => a + d, 0), tail = 2.5;
     const len = Math.ceil((beats * spb + tail) * sr);
     const drum = new Float32Array(len), piano = new Float32Array(len), ukulele = new Float32Array(len);
-    const harmonica = new Float32Array(len), kalimba = new Float32Array(len);
+    const harmonica = new Float32Array(len), kalimba = new Float32Array(len), ocarina = new Float32Array(len);
     const rand = rng(1857);
     let b = 0;
     for (const [name, d] of song.notes) {
@@ -84,6 +84,7 @@
       const i0 = Math.floor(t * sr); for (let i = 0; i < sr * 0.004 && i0 + i < len; i++) piano[i0 + i] += 0.02 * (rand() * 2 - 1) * (1 - i / (sr * 0.004));
       if (want.has('harmonica')) reed(harmonica, sr, t, hz(harpFit(m)), d * spb);
       if (want.has('kalimba')) addTone(kalimba, sr, t, hz(kalFit(m)), 1.6, 0.3, [[1, 1, 1], [5.4, 0.12, 6], [8.9, 0.04, 9]], 2.6);
+      if (want.has('ocarina')) vessel(ocarina, sr, t, hz(ocFit(m)), d * spb, rand);
       b += d;
     }
     // Chords on the song's own beat: in 4/4 D on every beat and U on the
@@ -103,11 +104,11 @@
       }
       cb += dur;
     }
-    const all = { piano, drum, ukulele, harmonica, kalimba }, stems = {};
+    const all = { piano, drum, ukulele, harmonica, kalimba, ocarina }, stems = {};
     for (const [id] of VOICES) if (want.has(id)) stems[id] = all[id];
     if (!chordTimeline(song).some(([c]) => c)) delete stems.ukulele; // melody-only song
     for (const k in stems) normalize(stems[k], 0.7);
-    const pan = { piano: -0.35, drum: 0, ukulele: 0.35, harmonica: 0.15, kalimba: -0.15 }, lvl = { piano: 0.75, drum: 0.95, ukulele: 0.7, harmonica: 0.6, kalimba: 0.7 };
+    const pan = { piano: -0.35, drum: 0, ukulele: 0.35, harmonica: 0.15, kalimba: -0.15, ocarina: 0.25 }, lvl = { piano: 0.75, drum: 0.95, ukulele: 0.7, harmonica: 0.6, kalimba: 0.7, ocarina: 0.6 };
     const L = new Float32Array(len), R = new Float32Array(len);
     for (const k in stems) {
       const a = (pan[k] + 1) * Math.PI / 4, gl = Math.cos(a) * lvl[k], gr = Math.sin(a) * lvl[k], s = stems[k];
@@ -137,8 +138,27 @@
   /** 17-key C kalimba covers C4–E6, white notes only. */
   function kalFit(m) { let x = m; while (x < 60) x += 12; while (x > 88) x -= 12; return x; }
 
+  /* Ocarina: a Helmholtz vessel flute is almost a pure sine (very weak
+     overtones), with a soft breath "chiff" at the start, a little breath
+     noise under the tone and slow breath-pressure vibrato. */
+  function vessel(buf, sr, t, f, dur, rand, gain = 0.25) {
+    const i0 = Math.floor(t * sr), n = Math.min(buf.length - i0, Math.floor((dur * 0.95 + 0.06) * sr));
+    let ph = 0, lp = 0;
+    for (let i = 0; i < n; i++) {
+      const tt = i / sr, vib = 1 + 0.003 * Math.sin(2 * Math.PI * 4.6 * tt) * Math.min(1, tt / 0.35);
+      ph += 2 * Math.PI * f * vib / sr;
+      lp += 0.08 * ((rand() * 2 - 1) - lp); // soft low-passed breath
+      const tone = Math.sin(ph) + 0.06 * Math.sin(2 * ph) + 0.02 * Math.sin(3 * ph);
+      const att = Math.min(1, tt / 0.06), rel = i > n - sr * 0.06 ? (n - i) / (sr * 0.06) : 1;
+      const chiff = Math.exp(-tt / 0.03) * 0.5;
+      buf[i0 + i] += gain * rel * (att * tone * 0.9 + (0.12 + chiff) * lp * 3);
+    }
+  }
+  /** 12-hole Alto C ocarina sounds A4–F6 (see songlesson.js). */
+  function ocFit(m) { let x = m; while (x < 69) x += 12; while (x > 89) x -= 12; return x; }
+
   function peakOf(a) { let p = 0; for (let i = 0; i < a.length; i++) { const v = Math.abs(a[i]); if (v > p) p = v; } return p; }
   function normalize(a, to) { const p = peakOf(a); if (p > 0) { const g = to / p; for (let i = 0; i < a.length; i++) a[i] *= g; } }
 
-  root.MF_RENDER = { render, midiOf, SHAPES, peakOf, VOICES, chordTimeline, harpFit, rootOf };
+  root.MF_RENDER = { render, midiOf, SHAPES, peakOf, VOICES, chordTimeline, harpFit, ocFit, rootOf };
 })(typeof globalThis !== 'undefined' ? globalThis : this);

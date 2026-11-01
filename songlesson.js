@@ -83,5 +83,42 @@
     return { index: k, num: num + '°'.repeat(oct), text: `Tine ${num}${'°'.repeat(oct)} (${name})` };
   }
 
-  root.MF_SONGLESSON = { fromSong, harpHole, harpProblem, kalimbaTine, KALIMBA_LAYOUT, HARP_BLOW, HARP_DRAW, midi };
+  /* Ocarina: 12-hole Alto C (sweet-potato), sounding A4–F6.
+     Fingerings from the "Fingering Diagram for 12-hole Ocarina" chart at
+     https://sound.jp/suimin/fingering_e.htm (cross-checked against
+     https://playsoloist.com/ocarina/finger-chart). Notation there:
+     LEFT "T-1234" RIGHT "T-1234" — thumb hole, then index→pinky; ":" after a
+     right-hand hole = the sub-hole beside it closed too. X closed, O open.
+     Stored here as 12 booleans (true = cover), in OC_HOLES order. */
+  const OC_HOLES = ['LT', 'L1', 'L2', 'L3', 'L4', 'RT', 'R1', 'R2', 'R3', 'R4', 'SA', 'SB'];
+  const OC_CHART = [ // midi → chart string, low A (69) to high F (89)
+    'X-XXXX X-X:X:XX', 'X-XXXX X-X:XXX', 'X-XXXX X-XX:XX', 'X-XXXX X-XXXX', 'X-XXXX X-XX:XO',
+    'X-XXXX X-XXXO', 'X-XXXX X-XXOX', 'X-XXXX X-XXOO', 'X-XXXX X-XOOO', 'X-XXXX X-OOXO',
+    'X-XXXX X-OOOO', 'X-XXOX X-OOXO', 'X-XXOX X-OOOO', 'X-XOOX X-OOXO', 'X-XOOX X-OOOO',
+    'X-OOOX X-OOOO', 'O-OOOX X-OOXO', 'O-OOOX X-OOOO', 'O-OOOO X-OOOO', 'O-OOOX O-OOOO', 'O-OOOO O-OOOO'];
+  const OC_LO = 69, OC_HI = 89;
+  function ocChart(str) {
+    const [l, r] = str.split(' '), c = (ch) => ch === 'X' || ch === ':';
+    const L = l.replace('-', ''), fing = [], subs = [];
+    const R = r.replace('-', '');
+    for (let i = 0; i < R.length; i++) { if (R[i] === ':') { subs[fing.length - 1] = true; continue; } fing.push(c(R[i])); }
+    // fing = [RT, R1, R2, R3, R4]; on that chart ':' follows R1 (sub-hole SA) or R2 (SB)
+    return [c(L[0]), c(L[1]), c(L[2]), c(L[3]), c(L[4]), ...fing, !!subs[1], !!subs[2]];
+  }
+  const NAMES = ['C', 'C#', 'D', 'Eb', 'E', 'F', 'F#', 'G', 'Ab', 'A', 'Bb', 'B'];
+  /** Where a note sits on the ocarina, or null if outside A4–F6. */
+  function ocarinaHole(name) {
+    const m = midi(name); if (m == null || m < OC_LO || m > OC_HI) return null;
+    const cover = ocChart(OC_CHART[m - OC_LO]), n = cover.filter(Boolean).length;
+    return { cover, chart: OC_CHART[m - OC_LO], tab: `${n}●`, text: `Ocarina ${NAMES[m % 12]}${Math.floor(m / 12) - 1}: cover ${n} of 12` };
+  }
+  /** Why a note can't be played as written on the ocarina (null if it can). */
+  function ocarinaProblem(name) {
+    const m = midi(name); if (m == null) return 'not a note';
+    return m < OC_LO ? 'below low A' : m > OC_HI ? 'above high F' : null;
+  }
+  /** Nearest octave of midi m inside the ocarina's range. */
+  function ocFit(m) { let x = m; while (x < OC_LO) x += 12; while (x > OC_HI) x -= 12; return x < OC_LO ? m : x; }
+
+  root.MF_SONGLESSON = { ocarinaHole, ocarinaProblem, ocFit, OC_HOLES, OC_CHART, OC_LO, OC_HI, fromSong, harpHole, harpProblem, kalimbaTine, KALIMBA_LAYOUT, HARP_BLOW, HARP_DRAW, midi };
 })(typeof globalThis !== 'undefined' ? globalThis : this);
