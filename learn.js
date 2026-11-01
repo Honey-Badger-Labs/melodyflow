@@ -152,6 +152,9 @@
       const p = ukePosition(name);
       return p && { ...p, text: p.fret === 0 ? `${p.stringName} string, open` : `${p.stringName} string, fret ${p.fret}` };
     }
+    const SL = root.MF_SONGLESSON;
+    if (inst === 'harmonica' && SL) { const h = SL.harpHole(name); return h && { ...h, midi: parseNote(name).midi }; }
+    if (inst === 'kalimba' && SL) { const k = SL.kalimbaTine(name); return k && { ...k, midi: parseNote(name).midi }; }
     return null;
   }
 
@@ -172,14 +175,23 @@
     return lesson.notes.every(([n]) => where(n, inst) !== null);
   }
 
-  const api = {
+  /** Learn instruments, in the order shown. */
+  const INSTS = [['piano', 'Piano'], ['drum', 'Tongue drum'], ['ukulele', 'Ukulele'], ['harmonica', 'Harmonica (C)'], ['kalimba', 'Kalimba (17)']];
+  const INST_IDS = INSTS.map((x) => x[0]);
+
+  /** Which instrument panel the view draws — the selected one, always. */
+  function panelFor(inst) {
+    return { piano: 'piano', drum: 'drum', ukulele: 'uke', harmonica: 'harmonica', kalimba: 'kalimba' }[inst] || 'piano';
+  }
+
+  const api = { INSTS, panelFor,
     parseNote, midiToHz, staffStep, ledgerLines, onLine, LESSONS, pianoKeys, pianoFinger,
     KEY_MAP, drumPad, ukePosition, where, timeline, isRight, playableOn, PIANO_LOW, PIANO_HIGH,
   };
 
   /* ── the view ────────────────────────────────────────────────────────
      Owns its own state, so the app's re-render can remount it freely. */
-  const S = { lesson: 0, inst: 'piano', mode: 'watch', i: -1, playing: false, tempo: null, names: true, timer: null, msg: '', help: false };
+  const S = { song: null, lesson: 0, inst: 'piano', mode: 'watch', i: -1, playing: false, tempo: null, names: true, timer: null, msg: '', help: false };
 
   function esc(s) { return String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]); }
 
@@ -264,26 +276,58 @@
     return s + '</svg>';
   }
 
+  function harpSvg(w) {
+    const SL = root.MF_SONGLESSON, cw = 52;
+    let s = `<div data-learn-harmonica style="display:flex;gap:4px;justify-content:center">`;
+    for (let h = 1; h <= 10; h++) {
+      const on = w && w.hole === h, b = SL ? SL.HARP_BLOW[h - 1] : 0, d = SL ? SL.HARP_DRAW[h - 1] : 0;
+      const nm = (m) => ['C', 'C#', 'D', 'Eb', 'E', 'F', 'F#', 'G', 'Ab', 'A', 'Bb', 'B'][m % 12];
+      s += `<div style="width:${cw}px;display:flex;flex-direction:column;gap:3px;font:500 10px Inter,sans-serif;color:${DIM};text-align:center">
+        <button data-midi="${b}" style="height:30px;border-radius:6px;border:1px solid ${on && w.dir === 'blow' ? ACC : '#3a3d47'};background:${on && w.dir === 'blow' ? '#3b336b' : '#22242a'};color:${INK};font:600 11px Inter,sans-serif">${nm(b)} ↑</button>
+        <div style="height:26px;border-radius:4px;background:${on ? ACC : '#8a8d99'};color:#161826;font:700 14px/26px Inter,sans-serif">${h}</div>
+        <button data-midi="${d}" style="height:30px;border-radius:6px;border:1px solid ${on && w.dir === 'draw' ? ACC : '#3a3d47'};background:${on && w.dir === 'draw' ? '#3b336b' : '#22242a'};color:${INK};font:600 11px Inter,sans-serif">${nm(d)} ↓</button></div>`;
+    }
+    return s + `</div><div style="text-align:center;font:400 11px Inter,sans-serif;color:${DIM};margin-top:6px">↑ blow (tab 4) · ↓ draw (tab -4)</div>`;
+  }
+
+  function kalimbaSvg(w) {
+    const SL = root.MF_SONGLESSON; if (!SL) return '';
+    const n = SL.KALIMBA_LAYOUT.length, mid = (n - 1) / 2;
+    return `<div data-learn-kalimba style="display:flex;gap:3px;justify-content:center;align-items:flex-start">${SL.KALIMBA_LAYOUT.map((name, k) => {
+      const t = SL.kalimbaTine(name), on = w && w.index === k, h = 120 - Math.abs(k - mid) * 8;
+      return `<button data-midi="${parseNote(name).midi}" style="width:26px;height:${h}px;border-radius:0 0 13px 13px;border:1px solid ${on ? ACC : '#3a3d47'};background:${on ? ACC : '#c9cbd3'};color:#161826;font:600 10px Inter,sans-serif;padding:0;display:flex;align-items:flex-end;justify-content:center;padding-bottom:4px">${t.num}</button>`;
+    }).join('')}</div>`;
+  }
+
+  /** The lesson on screen: a Songbook song if one was handed in, else a built-in lesson. */
+  const current = () => S.song || LESSONS[S.lesson];
+
   let host = null;
   function draw() {
     if (!host) return;
-    const L = LESSONS[S.lesson], cur = S.i, note = cur >= 0 ? L.notes[cur][0] : L.notes[0][0];
+    const L = current(), cur = S.i, note = cur >= 0 ? L.notes[cur][0] : L.notes[0][0];
     const w = where(note, S.inst);
     const tempo = S.tempo || L.tempo;
     const btn = (act, v, label, on) => `<button data-l="${act}" data-v="${v}" class="mf-btn" style="border:1px solid ${on ? ACC : '#3a3d47'};background:${on ? '#2b2741' : 'transparent'};color:${on ? '#d2cefd' : INK};cursor:pointer">${label}</button>`;
     let inst = '';
-    if (S.inst === 'piano') inst = pianoSvg(cur >= 0 && w ? w.midi : null);
-    else if (S.inst === 'drum') inst = drumSvg(cur >= 0 && w ? w.pad : null);
+    const panel = panelFor(S.inst);
+    if (panel === 'piano') inst = pianoSvg(cur >= 0 && w ? w.midi : null);
+    else if (panel === 'drum') inst = drumSvg(cur >= 0 && w ? w.pad : null);
+    else if (panel === 'harmonica') inst = harpSvg(cur >= 0 ? w : null);
+    else if (panel === 'kalimba') inst = kalimbaSvg(cur >= 0 ? w : null);
     else inst = ukeSvg(cur >= 0 ? w : null);
+    const bad = S.inst === 'harmonica' && root.MF_SONGLESSON
+      ? [...new Set(L.notes.map(([n]) => n).filter((n) => root.MF_SONGLESSON.harpProblem(n)))] : [];
     const ok = playableOn(L, S.inst);
     host.innerHTML = `<div data-learn class="mf-learn" style="padding:10px 16px;display:flex;flex-direction:column;gap:10px">
       <div class="mf-learn-turn" style="display:none;padding:8px 12px;border-radius:8px;background:#2b2741;color:#d2cefd;font:500 13px Inter,sans-serif">Tip: turn sideways for a bigger staff.</div>
       <div class="mf-row mf-learn-lessons">
         <span style="font:500 20px var(--font-heading,serif);margin-right:8px">Learn</span>
-        ${LESSONS.map((x, k) => btn('lesson', k, esc(x.title), k === S.lesson)).join('')}
+        ${S.song ? `<span data-learn-song style="font:500 15px Inter,sans-serif;color:${INK}">${esc(S.song.title)}</span>${btn('lessons', '', 'Other lessons', false)}`
+          : LESSONS.map((x, k) => btn('lesson', k, esc(x.title), k === S.lesson)).join('')}
       </div>
       <div class="mf-row mf-learn-controls">
-        ${btn('inst', 'piano', 'Piano', S.inst === 'piano')}${btn('inst', 'drum', 'Tongue drum', S.inst === 'drum')}${btn('inst', 'ukulele', 'Ukulele', S.inst === 'ukulele')}
+        ${INSTS.map(([id, label]) => btn('inst', id, label, S.inst === id)).join('')}
         <span style="width:12px"></span>
         ${btn('mode', 'watch', 'Watch', S.mode === 'watch')}${btn('mode', 'step', 'Step — you play', S.mode === 'step')}
         ${btn('names', '', S.names ? 'Hide note names' : 'Show note names', false)}${btn('help', '', '?', S.help)}
@@ -293,6 +337,7 @@
       <div class="mf-learn-tip" style="${S.help ? '' : 'display:none;'}font:400 12.5px/1.5 Inter,sans-serif;color:#a2a4b0">${esc(L.tip)} <span style="color:${DIM}">Lines, bottom to top: E G B D F (“Every Good Boy Does Fine”). Spaces: F A C E.</span></div>
       <div class="mf-learn-stage"><div class="mf-learn-staff" data-learn-staff-wrap style="overflow-x:auto;background:#17181c;border-radius:10px;padding:6px">${staffSvg(L, cur, S.names)}</div>
       <div data-learn-now style="font:600 15px Inter,sans-serif;color:${ACC};min-height:20px">${cur >= 0 ? `${esc(note.replace(/\d/, ''))} — ${w ? esc(w.text) + (w.finger ? `, finger ${w.finger}` : '') : 'not on this instrument'}` : (ok ? 'Press ' + (S.mode === 'watch' ? 'Play' : 'Start') + ' to begin.' : 'Some notes in this lesson are outside this instrument.')}${S.msg ? ` <span style="color:#e59">${esc(S.msg)}</span>` : ''}</div>
+      ${bad.length ? `<div data-learn-harp-flag style="font:400 12px Inter,sans-serif;color:#e0c79a">Not playable on a C harp without bends: ${bad.map((n) => esc(n) + ' (' + esc(root.MF_SONGLESSON.harpProblem(n)) + ')').join(', ')}</div>` : ''}
       <div class="mf-learn-inst" style="background:#17181c;border-radius:10px;padding:10px">${inst}</div></div>
     </div>`;
     follow();
@@ -309,7 +354,7 @@
   function sound(name) { const n = parseNote(name); if (n) tone(midiToHz(n.midi)); }
 
   function watchNext() {
-    const L = LESSONS[S.lesson];
+    const L = current();
     S.i++;
     if (S.i >= L.notes.length) { stop(); S.i = -1; draw(); return; }
     const [n, d] = L.notes[S.i];
@@ -320,7 +365,7 @@
   function played(midi) {
     tone(midiToHz(midi), 0.4);
     if (S.mode !== 'step' || !S.playing) return;
-    const L = LESSONS[S.lesson];
+    const L = current();
     if (isRight(L.notes[S.i][0], midi)) {
       S.msg = '';
       S.i++;
@@ -335,7 +380,8 @@
     if (t.dataset.midi) { played(+t.dataset.midi); return; }
     const v = t.dataset.v;
     switch (t.dataset.l) {
-      case 'lesson': stop(); S.lesson = +v; S.i = -1; S.tempo = null; break;
+      case 'lessons': stop(); S.song = null; S.i = -1; S.tempo = null; break;
+      case 'lesson': stop(); S.song = null; S.lesson = +v; S.i = -1; S.tempo = null; break;
       case 'inst': stop(); S.inst = v; S.i = -1; if (api.onInst) api.onInst(v); break;
       case 'help': S.help = !S.help; break;
       case 'mode': stop(); S.mode = v; S.i = -1; break;
@@ -360,9 +406,10 @@
   function mount(el, opts) {
     host = el;
     if (opts) {
-      if (['piano', 'drum', 'ukulele'].includes(opts.inst) && opts.inst !== S.inst) { stop(); S.inst = opts.inst; S.i = -1; }
+      if (INST_IDS.includes(opts.inst) && opts.inst !== S.inst) { stop(); S.inst = opts.inst; S.i = -1; }
+      if (opts.song && (!S.song || S.song.id !== opts.song.id || S.song.notes.length !== opts.song.notes.length)) { stop(); S.song = opts.song; S.i = -1; S.tempo = null; }
       const k = opts.lesson ? LESSONS.findIndex((x) => x.id === opts.lesson) : -1;
-      if (k >= 0 && k !== S.lesson) { stop(); S.lesson = k; S.i = -1; S.tempo = null; }
+      if (k >= 0 && (k !== S.lesson || S.song)) { S.song = null; stop(); S.lesson = k; S.i = -1; S.tempo = null; }
     }
     if (!wired && root.document) {
       wired = true;
