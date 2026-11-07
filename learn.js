@@ -56,7 +56,7 @@
      Traditional and public-domain melodies, all inside C4–E5 so they sit on
      the treble staff with at most one ledger line and fit the tongue drum,
      a soprano ukulele and the first two octaves of a piano.
-     Each note is [name, beats]. */
+     Each melody note is [name, beats]; optional leftHand is [name, beats, onset]. */
   const LESSONS = [
     {
       id: 'c-scale', title: 'The C major scale', tempo: 72,
@@ -83,14 +83,23 @@
     },
   ];
 
+  // Original, deliberately simple accompaniments to public-domain melodies.
+  // [pitch, beats, onset in beats]; never sourced from a commercial arrangement.
+  LESSONS.find((l) => l.id === 'mary').leftHand = [
+    ['C3', 4, 0], ['G3', 4, 4], ['G3', 4, 8], ['C3', 4, 12],
+  ];
+  LESSONS.find((l) => l.id === 'twinkle').leftHand = [
+    ['C3', 4, 0], ['F3', 4, 4], ['F3', 4, 8], ['G3', 2, 12], ['C3', 2, 14],
+  ];
+
   /* ── instruments ───────────────────────────────────────────────────── */
 
-  /** Two octaves from middle C: the first thing a new pianist learns to find. */
-  const PIANO_LOW = 60, PIANO_HIGH = 83;
+  /** Include C3 bass for a 25-key controller; expand above C5 for higher melodies. */
+  const PIANO_LOW = 48, PIANO_HIGH = 83;
   /** Home row, mapped to the white keys of the first octave, so a laptop can play along. */
   const KEY_MAP = { a: 60, w: 61, s: 62, e: 63, d: 64, f: 65, t: 66, g: 67, y: 68, h: 69, u: 70, j: 71, k: 72, o: 73, l: 74, p: 75, ';': 76 };
 
-  function pianoKeys(low = PIANO_LOW, high = PIANO_HIGH) {
+  function pianoKeys(low = PIANO_LOW, high = 72) {
     const out = [];
     for (let m = low; m <= high; m++) {
       const pc = m % 12;
@@ -166,6 +175,51 @@
     return { starts, total: t };
   }
 
+  /** Merge independent hand parts into onset groups. Non-piano stays melody-only. */
+  function lessonEvents(lesson, inst = 'piano', hands = 'both') {
+    const { starts } = timeline(lesson.notes);
+    const events = lesson.notes.map(([name, duration], i) => ({ name, duration, start: starts[i], hand: 'RH', melodyIndex: i }));
+    if (inst === 'piano' && hands === 'both') {
+      for (const [name, duration, start] of lesson.leftHand || []) events.push({ name, duration, start, hand: 'LH' });
+    }
+    return events.sort((a, b) => a.start - b.start || a.hand.localeCompare(b.hand));
+  }
+
+  function lessonGroups(lesson, inst = 'piano', hands = 'both') {
+    const groups = [];
+    for (const event of lessonEvents(lesson, inst, hands)) {
+      let group = groups[groups.length - 1];
+      if (!group || group.start !== event.start) groups.push(group = { start: event.start, notes: [] });
+      group.notes.push(event);
+    }
+    return groups;
+  }
+
+  /** Shared horizontal geometry for bars and piano, including the black keys. */
+  function keyLayout(low = PIANO_LOW, high = 72) {
+    const keys = pianoKeys(low, high); let white = 0;
+    const xs = {};
+    for (const k of keys) if (!k.black) xs[k.midi] = white++ * 36;
+    return { width: white * 36, keys: keys.map((k) => ({ ...k,
+      x: k.black ? xs[k.midi - 1] + 25 : xs[k.midi] + 1, width: k.black ? 22 : 34,
+    })) };
+  }
+
+  function fallingBars(events, beat, low = PIANO_LOW, high = 72) {
+    const layout = keyLayout(low, high);
+    return events.map((e) => {
+      const key = layout.keys.find((k) => k.midi === parseNote(e.name).midi);
+      return key && { ...e, x: key.x, width: key.width, height: e.duration * 38,
+        y: 220 - (e.start - beat + e.duration) * 38 };
+    }).filter(Boolean);
+  }
+
+  /** All MIDI channels; ignore note-off, zero-velocity note-on and system traffic. */
+  function midiNoteOn(data) {
+    if (!data || data.length < 3 || (data[0] & 0xf0) !== 0x90 || data[2] === 0 || data[1] > 127) return null;
+    return data[1];
+  }
+
   /** In step mode, did the player hit the note we're waiting for? Octave matters. */
   function isRight(expectedName, playedMidi) {
     const n = parseNote(expectedName);
@@ -173,7 +227,7 @@
   }
 
   function playableOn(lesson, inst) {
-    return lesson.notes.every(([n]) => where(n, inst) !== null);
+    return lessonEvents(lesson, inst).every(({ name }) => where(name, inst) !== null);
   }
 
   /** Learn instruments, in the order shown. */
@@ -185,72 +239,111 @@
     return { piano: 'piano', drum: 'drum', ukulele: 'uke', harmonica: 'harmonica', kalimba: 'kalimba', ocarina: 'ocarina' }[inst] || 'piano';
   }
 
-  const api = { INSTS, panelFor,
+  const api = { INSTS, panelFor, lessonEvents, lessonGroups, keyLayout, fallingBars, midiNoteOn,
     parseNote, midiToHz, staffStep, ledgerLines, onLine, LESSONS, pianoKeys, pianoFinger,
     KEY_MAP, drumPad, ukePosition, where, timeline, isRight, playableOn, PIANO_LOW, PIANO_HIGH,
   };
 
   /* ── the view ────────────────────────────────────────────────────────
      Owns its own state, so the app's re-render can remount it freely. */
-  const S = { song: null, lesson: 0, inst: 'piano', mode: 'watch', i: -1, playing: false, tempo: null, names: true, timer: null, msg: '', help: false };
+  const S = { song: null, lesson: 0, inst: 'piano', mode: 'watch', i: -1, playing: false, tempo: null, names: true, timer: null, msg: '', help: false, view: 'both', hands: 'both', matched: new Set(), frame: null, beat: 0, anchor: 0, msPerBeat: 0, midiStatus: '', midiConnecting: false };
 
   function esc(s) { return String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]); }
 
   let ac = null;
-  function tone(hz, sec = 0.5) {
+  const voices = new Set();
+  function unlockAudio() {
     try {
       ac = ac || new (root.AudioContext || root.webkitAudioContext)();
+      if (ac.state === 'suspended') ac.resume().catch(() => {});
+    } catch (_) { /* audio is optional */ }
+  }
+  function tone(hz, sec = 0.5) {
+    try {
+      unlockAudio();
       const o = ac.createOscillator(), g = ac.createGain();
       o.type = 'triangle'; o.frequency.value = hz;
       g.gain.setValueAtTime(0.0001, ac.currentTime);
       g.gain.exponentialRampToValueAtTime(0.3, ac.currentTime + 0.02);
       g.gain.exponentialRampToValueAtTime(0.0001, ac.currentTime + sec);
-      o.connect(g).connect(ac.destination); o.start(); o.stop(ac.currentTime + sec + 0.05);
+      o.connect(g).connect(ac.destination); voices.add(o);
+      o.onended = () => { voices.delete(o); o.disconnect(); g.disconnect(); };
+      o.start(); o.stop(ac.currentTime + sec + 0.05);
     } catch (e) { /* no audio, still teaches */ }
   }
 
-  const ACC = '#a99cf8', DIM = '#595d6c', INK = '#e7e6ee';
+  const ACC = '#a99cf8', LH = '#65d9c1', DIM = '#595d6c', INK = '#e7e6ee';
 
-  function staffSvg(lesson, cur, names) {
+  function staffSvg(lesson, cur, names, bass = false) {
     const W = Math.max(640, 90 + lesson.notes.length * 56), gap = 12, base = 112;
+    const starts = timeline(lesson.notes).starts;
+    const entries = bass ? (lesson.leftHand || []).map(([n, d, beat]) => [n, d, starts.indexOf(beat)]) : lesson.notes.map(([n, d], k) => [n, d, k]);
     const y = (step) => base - step * (gap / 2);
-    let s = `<svg viewBox="0 0 ${W} 170" width="100%" height="170" role="img" aria-label="Staff for ${esc(lesson.title)}" data-learn-staff>`;
+    let s = `<svg viewBox="0 0 ${W} 170" width="100%" height="170" role="img" aria-label="${bass ? 'Left hand bass' : 'Right hand treble'} staff for ${esc(lesson.title)}" data-learn-staff>`;
     for (let l = 0; l < 5; l++) s += `<line x1="10" x2="${W - 10}" y1="${y(l * 2)}" y2="${y(l * 2)}" stroke="${DIM}" stroke-width="1.2"/>`;
-    s += `<text x="14" y="${y(2) + 22}" font-size="64" fill="${INK}" font-family="serif">𝄞</text>`;
-    lesson.notes.forEach(([n, d], k) => {
-      const st = staffStep(n), x = 90 + k * 56, on = k === cur;
+    s += `<text x="14" y="${y(2) + 22}" font-size="64" fill="${INK}" font-family="serif">${bass ? '𝄢' : '𝄞'}</text>`;
+    entries.forEach(([n, d, k]) => {
+      const st = staffStep(n) + (bass ? 12 : 0), x = 90 + k * 56, on = k === cur;
       if (on) s += `<rect data-learn-cursor x="${x - 22}" y="6" width="44" height="158" rx="8" fill="${ACC}" fill-opacity="0.16" stroke="${ACC}" stroke-opacity="0.6"/>`;
-      const col = on ? ACC : INK;
+      const col = bass ? LH : (on ? ACC : INK);
       for (const L of ledgerLines(st)) s += `<line x1="${x - 13}" x2="${x + 13}" y1="${y(L)}" y2="${y(L)}" stroke="${col}" stroke-width="1.4"/>`;
       const hollow = d >= 2;
       s += `<ellipse cx="${x}" cy="${y(st)}" rx="7.5" ry="5.6" transform="rotate(-20 ${x} ${y(st)})" fill="${hollow ? 'none' : col}" stroke="${col}" stroke-width="2" ${on ? 'data-now' : ''}/>`;
       const up = st < 4;
-      s += up ? `<line x1="${x + 7}" x2="${x + 7}" y1="${y(st)}" y2="${y(st) - 34}" stroke="${col}" stroke-width="1.6"/>`
+      if (d < 4) s += up ? `<line x1="${x + 7}" x2="${x + 7}" y1="${y(st)}" y2="${y(st) - 34}" stroke="${col}" stroke-width="1.6"/>`
         : `<line x1="${x - 7}" x2="${x - 7}" y1="${y(st)}" y2="${y(st) + 34}" stroke="${col}" stroke-width="1.6"/>`;
-      if (d === 1.5) s += `<circle cx="${x + 13}" cy="${y(st)}" r="2" fill="${col}"/>`;
+      if (d === 1.5 || d === 3) s += `<circle cx="${x + 13}" cy="${y(st)}" r="2" fill="${col}"/>`;
       if (d === 0.5) s += `<path d="M${x + 7} ${y(st) - 34} q 10 8 6 20" stroke="${col}" fill="none" stroke-width="1.6"/>`;
       if (names || on) s += `<text x="${x}" y="160" text-anchor="middle" font-family="Inter,sans-serif" font-size="${on ? 15 : 12}" font-weight="${on ? 700 : 400}" fill="${on ? ACC : DIM}">${n.replace(/\d/, '')}</text>`;
     });
     return s + '</svg>';
   }
 
-  function pianoSvg(hi) {
-    const keys = pianoKeys(), whites = keys.filter((k) => !k.black), ww = 36, H = 130;
+  function pianoSvg(highlights = [], high = 72) {
+    const keys = pianoKeys(PIANO_LOW, high), whites = keys.filter((k) => !k.black), ww = 36, H = 130;
+    const color = (m) => highlights.find((e) => parseNote(e.name).midi === m)?.hand === 'LH' ? LH : ACC;
+    const lit = (m) => highlights.some((e) => parseNote(e.name).midi === m);
     const rev = Object.fromEntries(Object.entries(KEY_MAP).map(([k, m]) => [m, k]));
-    let s = `<svg viewBox="0 0 ${whites.length * ww} ${H}" width="100%" height="${H}" data-learn-piano>`;
+    let s = `<svg viewBox="0 0 ${whites.length * ww} ${H}" width="100%" height="${H}" style="display:block;width:100%;height:auto" data-learn-piano>`;
     let wi = 0; const xs = {};
     for (const k of keys) if (!k.black) { xs[k.midi] = wi * ww; wi++; }
     for (const k of whites) {
-      const on = hi === k.midi, n = LETTERS[[0, 2, 4, 5, 7, 9, 11].indexOf(k.midi % 12)];
-      s += `<rect data-midi="${k.midi}" x="${xs[k.midi] + 1}" y="0" width="${ww - 2}" height="${H}" rx="4" fill="${on ? ACC : '#f3f2f7'}"/>`;
-      s += `<text x="${xs[k.midi] + ww / 2}" y="${H - 10}" text-anchor="middle" font-size="12" fill="#333" pointer-events="none">${n}${k.midi === 60 ? '₄' : ''}</text>`;
-      if (rev[k.midi]) s += `<text x="${xs[k.midi] + ww / 2}" y="${H - 28}" text-anchor="middle" font-size="9" fill="#999" pointer-events="none">${rev[k.midi].toUpperCase()}</text>`;
+      const on = lit(k.midi), n = LETTERS[[0, 2, 4, 5, 7, 9, 11].indexOf(k.midi % 12)];
+      s += `<rect data-midi="${k.midi}" x="${xs[k.midi] + 1}" y="0" width="${ww - 2}" height="${H}" rx="4" fill="${on ? color(k.midi) : '#f3f2f7'}"/>`;
+      s += `<text x="${xs[k.midi] + ww / 2}" y="${H - 10}" text-anchor="middle" font-size="12" fill="#333" pointer-events="none">${n}${Math.floor(k.midi / 12) - 1}</text>`;
+      const hint = rev[k.midi] || (k.midi < 60 && rev[k.midi + 12] ? '⇧' + rev[k.midi + 12] : '');
+      if (hint) s += `<text x="${xs[k.midi] + ww / 2}" y="${H - 28}" text-anchor="middle" font-size="9" fill="#999" pointer-events="none">${hint.toUpperCase()}</text>`;
     }
     for (const k of keys) if (k.black) {
-      const x = xs[k.midi - 1] + ww - 11, on = hi === k.midi;
-      s += `<rect data-midi="${k.midi}" x="${x}" y="0" width="22" height="${H * 0.6}" rx="3" fill="${on ? ACC : '#1b1c21'}"/>`;
+      const x = xs[k.midi - 1] + ww - 11, on = lit(k.midi);
+      s += `<rect data-midi="${k.midi}" x="${x}" y="0" width="22" height="${H * 0.6}" rx="3" fill="${on ? color(k.midi) : '#1b1c21'}"/>`;
     }
     return s + '</svg>';
+  }
+
+  const groupsNow = () => lessonGroups(current(), S.inst, S.hands);
+  const activeNotes = () => S.i >= 0 ? (groupsNow()[S.i]?.notes || []) : [];
+  const pianoHigh = () => Math.max(72, ...current().notes.map(([n]) => parseNote(n).midi));
+  const clockBeat = () => S.playing && S.mode === 'watch'
+    ? S.beat + (root.performance.now() - S.anchor) / S.msPerBeat : S.beat;
+
+  function fallingSvg() {
+    const high = pianoHigh(), layout = keyLayout(PIANO_LOW, high);
+    const bars = fallingBars(lessonEvents(current(), S.inst, S.hands), 0, PIANO_LOW, high);
+    return `<svg data-learn-falling viewBox="0 0 ${layout.width} 224" width="100%" role="img" aria-label="Falling notes: purple RH, mint LH; longer bars mean longer notes" style="display:block;width:100%;height:auto">
+      <defs><clipPath id="learn-fall-clip"><rect width="${layout.width}" height="220"/></clipPath></defs>
+      ${layout.keys.map((k) => `<line x1="${k.x}" x2="${k.x}" y1="0" y2="220" stroke="${DIM}" stroke-opacity=".2"/>`).join('')}
+      <g clip-path="url(#learn-fall-clip)"><g data-learn-fall-track transform="translate(0 ${clockBeat() * 38})">${bars.map((b) => `<rect data-hand="${b.hand}" x="${b.x}" y="${b.y}" width="${b.width}" height="${b.height}" rx="4" fill="${b.hand === 'LH' ? LH : ACC}"><title>${b.hand} ${esc(b.name)} · ${b.duration} beats</title></rect>`).join('')}</g></g>
+      <line x1="0" x2="${layout.width}" y1="220" y2="220" stroke="${INK}" stroke-width="2"/>
+    </svg>`;
+  }
+
+  function animate() {
+    S.frame = null;
+    if (!S.playing || S.mode !== 'watch' || !host?.isConnected) return;
+    const el = host.querySelector('[data-learn-fall-track]');
+    if (el) el.setAttribute('transform', `translate(0 ${clockBeat() * 38})`);
+    S.frame = root.requestAnimationFrame(animate);
   }
 
   function drumSvg(hiPad) {
@@ -324,13 +417,14 @@
   let host = null;
   function draw() {
     if (!host) return;
-    const L = current(), cur = S.i, note = cur >= 0 ? L.notes[cur][0] : L.notes[0][0];
+    const L = current(), group = groupsNow()[S.i], cur = group?.notes.find((e) => e.hand === 'RH')?.melodyIndex ?? -1;
+    const note = group?.notes.find((e) => e.hand === 'RH')?.name || group?.notes[0]?.name || L.notes[0][0];
     const w = where(note, S.inst);
     const tempo = S.tempo || L.tempo;
     const btn = (act, v, label, on) => `<button data-l="${act}" data-v="${v}" class="mf-btn" style="border:1px solid ${on ? ACC : '#3a3d47'};background:${on ? '#2b2741' : 'transparent'};color:${on ? '#d2cefd' : INK};cursor:pointer">${label}</button>`;
     let inst = '';
     const panel = panelFor(S.inst);
-    if (panel === 'piano') inst = pianoSvg(cur >= 0 && w ? w.midi : null);
+    if (panel === 'piano') inst = pianoSvg(S.i >= 0 ? lessonEvents(L, S.inst, S.hands).filter((e) => e.start <= clockBeat() && e.start + e.duration > clockBeat()) : [], pianoHigh());
     else if (panel === 'drum') inst = drumSvg(cur >= 0 && w ? w.pad : null);
     else if (panel === 'harmonica') inst = harpSvg(cur >= 0 ? w : null);
     else if (panel === 'ocarina') inst = ocarinaSvg(cur >= 0 ? w : null);
@@ -352,16 +446,20 @@
         ${INSTS.map(([id, label]) => btn('inst', id, label, S.inst === id)).join('')}
         <span style="width:12px"></span>
         ${btn('mode', 'watch', 'Watch', S.mode === 'watch')}${btn('mode', 'step', 'Step — you play', S.mode === 'step')}
+        ${['staff', 'falling', 'both'].map((v) => btn('view', v, v[0].toUpperCase() + v.slice(1), S.view === v)).join('')}
+        ${S.inst === 'piano' && L.leftHand ? btn('hands', S.hands === 'both' ? 'right' : 'both', S.hands === 'both' ? 'Both hands' : 'Right hand only', true) : ''}
+        ${S.inst === 'piano' ? btn('midi', '', S.midiConnecting ? 'Connecting…' : 'Connect MIDI', false) : ''}
         ${btn('names', '', S.names ? 'Hide note names' : 'Show note names', false)}${btn('help', '', '?', S.help)}
         ${S.mode === 'watch' ? `<label style="font:400 12px Inter,sans-serif;color:${DIM}">Tempo <input data-l="tempo" type="range" min="40" max="140" value="${tempo}"> ${tempo}</label>` : ''}
       </div>
       <button data-l="go" class="mf-btn mf-learn-go" style="width:100%;min-height:52px;border:0;border-radius:14px;background:${S.playing ? '#423a6a' : ACC};color:${S.playing ? '#f5f4ff' : '#161826'};font:600 17px Inter,sans-serif">${S.playing ? '■ Stop' : (S.mode === 'watch' ? '▶ Play lesson' : '▶ Start lesson')}</button>
       <div class="mf-learn-tip" style="${S.help ? '' : 'display:none;'}font:400 12.5px/1.5 Inter,sans-serif;color:#a2a4b0">${esc(L.tip)} <span style="color:${DIM}">Lines, bottom to top: E G B D F (“Every Good Boy Does Fine”). Spaces: F A C E.</span></div>
-      <div class="mf-learn-stage"><div class="mf-learn-staff" data-learn-staff-wrap style="overflow-x:auto;background:#17181c;border-radius:10px;padding:6px">${staffSvg(L, cur, S.names)}</div>
-      <div data-learn-now style="font:600 15px Inter,sans-serif;color:${ACC};min-height:20px">${cur >= 0 ? `${esc(note.replace(/\d/, ''))} — ${w ? esc(w.text) + (w.finger ? `, finger ${w.finger}` : '') : 'not on this instrument'}` : (ok ? 'Press ' + (S.mode === 'watch' ? 'Play' : 'Start') + ' to begin.' : 'Some notes in this lesson are outside this instrument.')}${S.msg ? ` <span style="color:#e59">${esc(S.msg)}</span>` : ''}</div>
+      <div style="font:400 12px Inter,sans-serif;color:${INK}" role="status">${S.inst === 'piano' ? `<span style="color:${ACC}">RH — right hand</span> · <span style="color:${LH}">LH — left hand</span> · ${esc(S.midiStatus || 'Tap keys, use A–; on your laptop, or connect a MIDI keyboard. Shift lowers laptop keys one octave.')}` : 'Melody only on this instrument.'}</div>
+      <div class="mf-learn-stage" data-view="${S.view}"><div class="mf-learn-staff" data-learn-staff-wrap style="${S.view === 'falling' ? 'display:none;' : ''}overflow-x:auto;background:#17181c;border-radius:10px;padding:6px">${staffSvg(L, cur, S.names)}${S.inst === 'piano' && S.hands === 'both' && L.leftHand ? staffSvg(L, cur, S.names, true) : ''}</div>
+      <div data-learn-now style="font:600 15px Inter,sans-serif;color:${ACC};min-height:20px">${S.i >= 0 ? `${activeNotes().map((e) => esc(e.hand + ' ' + e.name)).join(' + ')} · ${esc(note.replace(/\d/, ''))} — ${w ? esc(w.text) + (w.finger ? `, finger ${w.finger}` : '') : 'not on this instrument'}` : (S.playing ? 'Count in — get ready…' : ok ? 'Press ' + (S.mode === 'watch' ? 'Play' : 'Start') + ' to begin.' : 'Some notes in this lesson are outside this instrument.')}${S.msg ? ` <span style="color:#e59">${esc(S.msg)}</span>` : ''}</div>
       ${bad.length ? `<div data-learn-harp-flag style="font:400 12px Inter,sans-serif;color:#e0c79a">Not playable on a C harp without bends: ${bad.map((n) => esc(n) + ' (' + esc(root.MF_SONGLESSON.harpProblem(n)) + ')').join(', ')}</div>` : ''}
       ${ocBad.length ? `<div data-learn-ocarina-flag style="font:400 12px Inter,sans-serif;color:#e0c79a">Outside a 12-hole C ocarina (A4–F6) — Record and the ensemble move these by an octave: ${ocBad.map((n) => esc(n) + ' (' + esc(root.MF_SONGLESSON.ocarinaProblem(n)) + ')').join(', ')}</div>` : ''}
-      <div class="mf-learn-inst" style="background:#17181c;border-radius:10px;padding:10px">${inst}</div></div>
+      <div class="mf-learn-inst" style="background:#17181c;border-radius:10px;padding:10px"><div style="width:100%">${S.view !== 'staff' ? fallingSvg() : ''}${inst}</div></div></div>
     </div>`;
     follow();
   }
@@ -373,28 +471,80 @@
     if (cr.left < wr.left || cr.right > wr.right) wrap.scrollLeft += cr.left - wr.left - wr.width / 3;
   }
 
-  function stop() { clearTimeout(S.timer); S.timer = null; S.playing = false; }
-  function sound(name) { const n = parseNote(name); if (n) tone(midiToHz(n.midi)); }
+  function stop() {
+    clearTimeout(S.timer);
+    if (S.frame !== null) root.cancelAnimationFrame(S.frame);
+    S.frame = null; S.timer = null; S.playing = false; S.matched.clear();
+    for (const voice of voices) { try { voice.stop(); } catch (_) { /* already ended */ } }
+    voices.clear();
+  }
 
   function watchNext() {
-    const L = current();
+    const L = current(), groups = groupsNow();
     S.i++;
-    if (S.i >= L.notes.length) { stop(); S.i = -1; draw(); return; }
-    const [n, d] = L.notes[S.i];
-    sound(n); draw();
-    S.timer = setTimeout(watchNext, (60000 / (S.tempo || L.tempo)) * d);
+    if (S.i >= groups.length) { stop(); S.i = -1; draw(); return; }
+    const group = groups[S.i];
+    S.beat = group.start; S.anchor = root.performance.now();
+    S.msPerBeat = 60000 / (S.tempo || L.tempo);
+    group.notes.forEach((e) => { const n = parseNote(e.name); tone(midiToHz(n.midi), e.duration * S.msPerBeat / 1000); });
+    draw();
+    const end = Math.max(timeline(L.notes).total, ...lessonEvents(L, S.inst, S.hands).map((e) => e.start + e.duration));
+    S.timer = setTimeout(watchNext, S.msPerBeat * ((groups[S.i + 1]?.start ?? end) - group.start));
   }
 
   function played(midi) {
     tone(midiToHz(midi), 0.4);
-    if (S.mode !== 'step' || !S.playing) return;
-    const L = current();
-    if (isRight(L.notes[S.i][0], midi)) {
-      S.msg = '';
-      S.i++;
-      if (S.i >= L.notes.length) { stop(); S.i = -1; S.msg = ''; host && draw(); if (host) host.querySelector('[data-learn-now]').textContent = 'Well played — that was the whole tune.'; return; }
+    if (S.mode !== 'step' || !S.playing || S.i < 0) return;
+    const expected = activeNotes();
+    if (expected.some((e) => isRight(e.name, midi))) {
+      S.matched.add(midi); S.msg = '';
+      if (expected.every((e) => S.matched.has(parseNote(e.name).midi))) {
+        S.matched.clear(); S.i++;
+        if (S.i >= groupsNow().length) {
+          stop(); S.i = -1; draw();
+          if (host) host.querySelector('[data-learn-now]').textContent = 'Well played — that was the whole tune.';
+          return;
+        }
+        S.beat = groupsNow()[S.i].start;
+      } else S.msg = 'Good — now the other hand.';
     } else S.msg = 'Not quite — try again.';
     draw();
+  }
+
+  let midiAccess = null;
+  const midiHeld = new Map();
+  function wireMidi() {
+    midiHeld.clear();
+    let count = 0;
+    for (const input of midiAccess.inputs.values()) {
+      if (input.state === 'disconnected') { input.onmidimessage = null; continue; }
+      count++;
+      const held = new Set(); midiHeld.set(input.id, held);
+      input.onmidimessage = ({ data }) => {
+        const key = `${data[0] & 15}:${data[1]}`, type = data[0] & 0xf0;
+        if (type === 0x80 || (type === 0x90 && data[2] === 0)) { held.delete(key); return; }
+        const midi = midiNoteOn(data);
+        if (midi === null || held.has(key)) return;
+        held.add(key);
+        if (host?.isConnected && S.inst === 'piano') played(midi);
+      };
+    }
+    S.midiStatus = count ? `MIDI connected (${count} input${count === 1 ? '' : 's'}). Step waits for each hand; octave must match.` : 'No MIDI keyboard found. Plug in your MiniLab MkII, or use the screen/laptop keys.';
+    draw();
+  }
+
+  async function connectMidi() {
+    if (!root.navigator?.requestMIDIAccess) {
+      S.midiStatus = 'Web MIDI is unavailable here (including iOS Safari). Use screen or laptop keys, or a Web MIDI browser over HTTPS.'; draw(); return;
+    }
+    if (S.midiConnecting) return;
+    S.midiConnecting = true; draw();
+    try {
+      midiAccess = await root.navigator.requestMIDIAccess({ sysex: false });
+      if (!host) return;
+      midiAccess.onstatechange = wireMidi; wireMidi();
+    } catch (_) { S.midiStatus = 'MIDI permission denied or unavailable. Screen and laptop keys still work.'; }
+    finally { S.midiConnecting = false; draw(); }
   }
 
   function onClick(ev) {
@@ -406,13 +556,22 @@
       case 'lessons': stop(); S.song = null; S.i = -1; S.tempo = null; break;
       case 'lesson': stop(); S.song = null; S.lesson = +v; S.i = -1; S.tempo = null; break;
       case 'inst': stop(); S.inst = v; S.i = -1; if (api.onInst) api.onInst(v); break;
+      case 'view': S.view = v; break;
+      case 'hands': stop(); S.hands = v; S.i = -1; break;
+      case 'midi': connectMidi(); return;
       case 'help': S.help = !S.help; break;
       case 'mode': stop(); S.mode = v; S.i = -1; break;
       case 'names': S.names = !S.names; break;
       case 'go':
         if (S.playing) { stop(); S.i = -1; break; }
+        unlockAudio(); // user gesture: Safari must unlock audio before the lead-in timer
         S.playing = true; S.msg = '';
-        if (S.mode === 'watch') { S.i = -1; watchNext(); return; }
+        S.matched.clear(); S.beat = 0;
+        if (S.mode === 'watch') {
+          S.i = -1; S.beat = -4; S.anchor = root.performance.now(); S.msPerBeat = 60000 / (S.tempo || current().tempo);
+          draw(); S.timer = setTimeout(watchNext, 4 * S.msPerBeat);
+          S.frame = root.requestAnimationFrame(animate); return;
+        }
         S.i = 0; break;
       default: return;
     }
@@ -421,8 +580,9 @@
   function onInput(ev) { if (ev.target.dataset && ev.target.dataset.l === 'tempo') { S.tempo = +ev.target.value; } }
   function onKey(ev) {
     if (!host || !host.isConnected || ev.repeat || ev.metaKey || ev.ctrlKey) return;
+    if (/^(INPUT|SELECT|TEXTAREA)$/.test(ev.target?.tagName) || ev.target?.isContentEditable || ev.altKey) return;
     const m = KEY_MAP[ev.key.toLowerCase()];
-    if (m !== undefined) { ev.preventDefault(); played(m); }
+    if (m !== undefined) { ev.preventDefault(); played(m - (ev.shiftKey ? 12 : 0)); }
   }
 
   let wired = false;
@@ -440,9 +600,14 @@
       root.document.addEventListener('input', (e) => host && host.isConnected && onInput(e));
       root.document.addEventListener('keydown', onKey);
     }
+    if (midiAccess) { midiAccess.onstatechange = wireMidi; wireMidi(); }
     draw();
   }
-  function unmount() { stop(); host = null; }
+  function unmount() {
+    stop(); S.i = -1; host = null;
+    if (midiAccess) { midiAccess.onstatechange = null; for (const input of midiAccess.inputs.values()) input.onmidimessage = null; }
+    midiHeld.clear();
+  }
 
   api.mount = mount;
   api.unmount = unmount;
