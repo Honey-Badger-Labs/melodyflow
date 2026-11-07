@@ -73,6 +73,8 @@ input[type=range]{accent-color:var(--color-accent);background:transparent}
   .mf-learn-staff{grid-column:1;grid-row:1 / span 2}
   [data-learn-now]{grid-column:2;grid-row:1;font-size:14px!important}
   .mf-learn-inst{grid-column:2;grid-row:2;display:flex;align-items:center;justify-content:center}
+  .mf-learn-stage[data-view="falling"]{grid-template-columns:minmax(0,1fr)}
+  .mf-learn-stage[data-view="falling"] [data-learn-now],.mf-learn-stage[data-view="falling"] .mf-learn-inst{grid-column:1}
   .mf-learn-staff svg{height:min(170px,calc(100dvh - 190px))}
   .mf-record-stage{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,2fr);gap:8px}
   /* the tab bar becomes a slim left rail so the screen keeps its height */

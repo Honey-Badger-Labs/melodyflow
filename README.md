@@ -235,12 +235,36 @@ song and nothing else is removed.
 
 ## Learn mode
 
-Tap **♪ Learn** to get a landscape lesson on reading music. A treble staff shows each note with its letter name underneath (you can turn the names off once you know them). Under the staff is the instrument you picked: a two-octave **piano keyboard** (your computer keys A–; play it too), the tongue drum pads, or the ukulele fretboard. The current note lights up on both the staff and the instrument.
+Tap **♪ Learn** for a landscape lesson linking notation to your instrument.
+**Staff / Falling / Both** keeps the reading staff available; **Both** is the default.
+Falling bars line up with piano keys: the bottom reaches the strike line when the
+note starts, and bar length shows duration. Purple **RH** is right hand; mint
+**LH** is left hand. Watch has a four-beat visual lead-in, then follows your tempo
+(40–140 bpm); Step freezes at each onset until you play every indicated pitch,
+in either order. It checks the exact octave, not hold duration or simultaneity.
 
-- **Watch:** the tune plays and the highlight follows it, at a tempo you choose.
-- **Step — you play:** the lesson waits until you play the right note.
+The piano starts at **C3–C5** (25 keys, matching a MiniLab-sized range), expanding
+upwards if a melody needs it. Existing laptop keys **A–;** still play C4–E5;
+hold **Shift** for the octave below. You can also tap the on-screen keys.
+Mary Had a Little Lamb and Twinkle Twinkle have optional original, simple
+left-hand accompaniments; toggle **Both hands / Right hand only**. Other instruments
+keep the melody only, so bass notes never make drum or ukulele lessons unplayable.
+Two-hand staff view includes a bass clef underneath the treble staff.
 
-There are four lessons: the C major scale, Mary Had a Little Lamb, Ode to Joy and Twinkle Twinkle. It all works offline. Screenshots are in `docs/screenshots/learn-*.png`.
+**Connect MIDI** enables Web MIDI input (no SysEx) from an Arturia MiniLab MkII or
+any standard MIDI keyboard, on HTTPS or localhost in a supporting browser.
+Set the controller's octave so the intended keys send C3–C5 (MIDI 48–72).
+Note-on on any channel is accepted; note-off and zero-velocity messages don't
+advance Step. Held/repeated note-ons require release before another attack.
+Plug/unplug updates the status. No MIDI permission is requested until you click.
+iOS Safari and browsers without Web MIDI show a fallback message; screen and laptop
+input continue working. Leaving Learn removes MIDI handlers and stops playback.
+
+Built-in lessons are public-domain melodies (C major scale, Mary Had a Little Lamb,
+Ode to Joy and Twinkle Twinkle), with our own beginner accompaniment, not copied
+from Betacustic or any commercial tutorial catalog. No new copyrighted songs or
+arrangements are included. All views work offline after caching; MIDI depends on
+browser/device support. Screenshots are in `docs/screenshots/learn-*.png`.
 
 ## Install as an app
 
