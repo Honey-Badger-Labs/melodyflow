@@ -241,3 +241,7 @@ Tap **♪ Learn** to get a landscape lesson on reading music. A treble staff sho
 - **Step — you play:** the lesson waits until you play the right note.
 
 There are four lessons: the C major scale, Mary Had a Little Lamb, Ode to Joy and Twinkle Twinkle. It all works offline. Screenshots are in `docs/screenshots/learn-*.png`.
+
+## Install as an app
+
+Open https://honey-badger-labs.github.io/melodyflow/ in Chrome on Android and tap **Install MelodyFlow** on the Me tab (or use the browser menu → Install app). On iPhone, open it in Safari and use Share → Add to Home Screen. If Chrome only offers a plain shortcut, uninstall any old MelodyFlow copy first, then install again.
