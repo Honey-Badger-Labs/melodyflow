@@ -265,3 +265,7 @@ Ode to Joy and Twinkle Twinkle), with our own beginner accompaniment, not copied
 from Betacustic or any commercial tutorial catalog. No new copyrighted songs or
 arrangements are included. All views work offline after caching; MIDI depends on
 browser/device support. Screenshots are in `docs/screenshots/learn-*.png`.
+
+## Install as an app
+
+Open https://honey-badger-labs.github.io/melodyflow/ in Chrome on Android and tap **Install MelodyFlow** on the Me tab (or use the browser menu → Install app). On iPhone, open it in Safari and use Share → Add to Home Screen. If Chrome only offers a plain shortcut, uninstall any old MelodyFlow copy first, then install again.

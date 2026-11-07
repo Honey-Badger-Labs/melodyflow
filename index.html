@@ -8,7 +8,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="MelodyFlow">
 <title>MelodyFlow</title>
-<link rel="manifest" href="manifest.webmanifest?v=13">
+<link rel="manifest" href="manifest.webmanifest?v=14">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
@@ -856,8 +856,17 @@ const App = {
           </button>`;
         }).join('')||`<div style="font:400 14px Inter,sans-serif;color:var(--color-neutral-500);padding:12px 2px">No songs match.</div>`}
       </div>
+      ${this.installBlock()}
       <div style="height:16px"></div>
     </div>`;
+  },
+
+  /* Install: a button when Chrome offers a prompt, otherwise a short hint. Hidden once installed. */
+  installBlock(){
+    if(mfIsStandalone()) return '';
+    const head=`<div style="font:500 13px Inter,sans-serif;color:var(--color-neutral-500);margin-top:22px">Install</div>`;
+    if(mfInstallEvt) return head+`<div style="margin-top:8px"><button class="mf-card" id="mfInstallBtn" data-act="installApp"><div style="flex:1;min-width:0"><div style="font:500 15px Inter,sans-serif">Install MelodyFlow</div><div style="font:400 12.5px Inter,sans-serif;color:var(--color-neutral-500);margin-top:3px">Add it to your home screen and use it offline</div></div><span style="color:var(--color-neutral-600);font-size:18px">›</span></button></div>`;
+    return head+`<div id="mfInstallHint" style="font:400 12.5px/1.5 Inter,sans-serif;color:var(--color-neutral-500);margin-top:8px">To keep MelodyFlow on your home screen: on iPhone, tap Share, then Add to Home Screen. On Android Chrome, open the browser menu and choose Install app.</div>`;
   },
 
   /* The song screen's one decision: Listen, Learn or Record — and one big button. */
@@ -1524,6 +1533,7 @@ const App = {
         this.setState({tab:ds.v,screen:ds.v==='play'?'library':ds.v,from:null,picking:false,book:(ev&&ev.target&&ev.target.closest&&ev.target.closest('[data-book]'))?'mine':st.book}); break;
       case 'songMode': this.stop(); this.setState({songMode:ds.v}); break;
       case 'toggleMore': this.setState({more:!st.more}); break;
+      case 'installApp': if(mfInstallEvt){ const ev=mfInstallEvt; mfInstallEvt=null; ev.prompt(); (ev.userChoice||Promise.resolve()).finally(()=>this.render()); } break;
       case 'pickInstOpen': this.stop(); this.setState({picking:true}); break;
       case 'pickInstClose': this.setState({picking:false}); break;
       case 'pickInst': try{ localStorage.setItem('melodyflow-inst-picked','1'); }catch(e){}
@@ -1675,6 +1685,11 @@ window.App = App; // exposed for console debugging
 window.addEventListener('DOMContentLoaded',()=>App.init());
 
 /* register the service worker for offline use (ignored on file://) */
+/* Install prompt: stash Chrome's event so the Me tab can offer a real Install button. */
+var mfInstallEvt=null;
+function mfIsStandalone(){ return (window.matchMedia&&matchMedia('(display-mode: standalone)').matches)||navigator.standalone===true; }
+window.addEventListener('beforeinstallprompt',e=>{ e.preventDefault(); mfInstallEvt=e; if(window.App&&App.render) App.render(); });
+window.addEventListener('appinstalled',()=>{ mfInstallEvt=null; if(window.App&&App.render) App.render(); });
 if('serviceWorker' in navigator && location.protocol.startsWith('http')){
   window.addEventListener('load',()=>navigator.serviceWorker.register('sw.js',{updateViaCache:'none'}).catch(()=>{}));
 }

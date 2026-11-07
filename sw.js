@@ -2,7 +2,7 @@
    Online, every file comes fresh from the server, so a deploy reaches an
    installed app on its next launch. Offline, the last copy seen is served.
    CACHE only needs a bump to drop files that no longer exist. */
-const CACHE = 'melodyflow-v16';
+const CACHE = 'melodyflow-v17';
 // How long to wait on a slow network before falling back to the cached copy.
 const NETWORK_TIMEOUT_MS = 4000;
 const ASSETS = [
@@ -22,10 +22,11 @@ const ASSETS = [
   './record.js',
   './ux.js',
   './manifest.webmanifest',
-  './manifest.webmanifest?v=13',
+  './manifest.webmanifest?v=14',
   './icon.svg',
   './icon-maskable.svg',
   './icon-192.png',
+  './icon-512.png',
   './icon-maskable-512.png',
   './apple-touch-icon.png'
 ];
