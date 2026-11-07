@@ -428,7 +428,7 @@ const simple = await (async () => {
   p.on('pageerror', (e) => errors.push('simple page: ' + String(e)));
   await p.goto(url, { waitUntil: 'load' });
   await p.waitForTimeout(300);
-  const picker = await p.evaluate(() => document.querySelectorAll('[data-act="pickInst"]').length);
+  const picker = await p.evaluate(() => ({ actual: document.querySelectorAll('[data-act="pickInst"]').length, expected: MF_UX.INSTRUMENTS.length }));
   await p.click('[data-act="pickInst"][data-v="ukulele"]');
   const remembered = await p.evaluate(() => JSON.parse(localStorage.getItem('melodyflow')).inst);
   await p.fill('[data-act="search"]', 'jingle');
@@ -444,20 +444,49 @@ const simple = await (async () => {
   await p.click('[data-act="primary"]');
   const learn = await p.evaluate(() => ({ screen: App.state.screen, title: document.querySelector('[data-learn] [data-l="lesson"][style*="#2b2741"]')?.textContent || '', inst: document.querySelector('[data-learn] [data-l="inst"][data-v="ukulele"]')?.getAttribute('style').includes('#2b2741') }));
   await p.setViewportSize({ width: 844, height: 390 });
+  await p.click('[data-l="inst"][data-v="piano"]');
+  await p.click('[data-l="lesson"][data-v="1"]');
+  const learnViews = await p.evaluate(() => ({
+    staff: document.querySelectorAll('[data-learn-staff]').length,
+    falling: !!document.querySelector('[data-learn-falling]'),
+    keys: document.querySelectorAll('[data-learn-piano] [data-midi]').length,
+    aligned: Math.abs(document.querySelector('[data-learn-falling] [data-hand="LH"]').getBoundingClientRect().x - document.querySelector('[data-learn-piano] [data-midi="48"]').getBoundingClientRect().x) < 1,
+  }));
+  await p.click('[data-l="mode"][data-v="step"]');
+  await p.click('[data-l="go"]');
+  await p.click('[data-learn-piano] [data-midi="64"]');
+  const waitingForLeft = await p.evaluate(() => MF_LEARN._state.i === 0);
+  await p.keyboard.down('Shift'); await p.keyboard.press('A'); await p.keyboard.up('Shift');
+  const steppedHands = await p.evaluate(() => MF_LEARN._state.i === 1);
+  await p.screenshot({ path: path.join(os.tmpdir(), 'melodyflow-learn-both.png'), fullPage: true });
+  await p.click('[data-l="view"][data-v="staff"]');
+  const staffOnly = await p.evaluate(() => !document.querySelector('[data-learn-falling]') && document.querySelector('[data-learn-staff-wrap]').getBoundingClientRect().width > 0);
+  await p.click('[data-l="view"][data-v="falling"]');
+  const fallingOnly = await p.evaluate(() => getComputedStyle(document.querySelector('[data-learn-staff-wrap]')).display === 'none');
+  await p.click('[data-l="mode"][data-v="watch"]');
+  await p.click('[data-l="go"]');
+  const beforeY = await p.getAttribute('[data-learn-fall-track]', 'transform');
+  await p.waitForTimeout(180);
+  const animated = (await p.getAttribute('[data-learn-fall-track]', 'transform')) !== beforeY;
+  await p.click('[data-l="go"]');
   await p.click('[data-act="tab"][data-v="play"]');
   const rail = await p.evaluate(() => { const n = document.getElementById('tabbar').getBoundingClientRect(); return n.height > n.width && document.getElementById('phone').getBoundingClientRect().width >= 840; });
   await sb.close();
-  return { picker, remembered, visible, primaries, rec, learn, rail };
+  return { picker, remembered, visible, primaries, rec, learn, rail, learnViews, waitingForLeft, steppedHands, staffOnly, fallingOnly, animated };
 })();
 
 server.close();
 const checks = [
-  ['first launch asks for the instrument', simple.picker === 3],
+  ['first launch asks for the instrument', simple.picker.actual === simple.picker.expected && simple.picker.expected >= 3],
   ['the instrument is remembered', simple.remembered === 'ukulele'],
   ['search narrows the one list', simple.visible.length === 1 && simple.visible[0] === 'jingle'],
   ['the song screen has one primary button', simple.primaries === 1],
   ['Record mode opens the recorder on your instrument', simple.rec.screen === 'record' && simple.rec.inst === 'ukulele' && simple.rec.back],
   ['Learn mode opens the matching lesson on your instrument', simple.learn.screen === 'learn' && /Ode/.test(simple.learn.title) && simple.learn.inst],
+  ['Learn: two staves and 25 aligned piano/falling-note lanes', simple.learnViews.staff === 2 && simple.learnViews.falling && simple.learnViews.keys === 25 && simple.learnViews.aligned],
+  ['Learn: Step waits for left hand and accepts Shift bass keys', simple.waitingForLeft && simple.steppedHands],
+  ['Learn: Staff and Falling toggles work independently', simple.staffOnly && simple.fallingOnly],
+  ['Learn: falling notes move continuously during Watch lead-in', simple.animated],
   ['landscape: full width with a left tab rail', simple.rail],
   ['the uke tab draws a column per note', tabDrum.cells >= 6 && /C4: C string, open/.test(tabDrum.first || '')],
   ['the uke tab lights the note playing (drum)', tabLit.lit && tabLit.cur >= 0],
