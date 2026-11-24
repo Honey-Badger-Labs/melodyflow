@@ -1,0 +1,11 @@
+# Keeps the SHA-pinned GitHub Actions (and package lock files) current.
+# Each pin carries its version in a comment so Dependabot can bump it.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    groups:
+      actions:
+        patterns: ["*"]
